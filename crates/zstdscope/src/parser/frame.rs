@@ -1,3 +1,4 @@
+use super::header::parse_frame_header;
 use crate::{ByteSpan, Frame, FrameKind, SkippableFrame, ZstdError, ZstdFile, cursor::Cursor};
 
 const STANDARD_MAGIC: u32 = 0xFD2F_B528;
@@ -23,7 +24,7 @@ fn parse_frame(cursor: &mut Cursor<'_>, index: usize) -> Result<Frame, ZstdError
     let magic = cursor.read_u32_le()?;
 
     match magic {
-        STANDARD_MAGIC => parse_standard_frame(frame_start),
+        STANDARD_MAGIC => parse_standard_frame(cursor, frame_start),
         SKIPPABLE_MAGIC_MIN..=SKIPPABLE_MAGIC_MAX => {
             parse_skippable_frame(cursor, index, frame_start, magic)
         }
@@ -34,7 +35,12 @@ fn parse_frame(cursor: &mut Cursor<'_>, index: usize) -> Result<Frame, ZstdError
     }
 }
 
-fn parse_standard_frame(frame_start: usize) -> Result<Frame, ZstdError> {
+fn parse_standard_frame(
+    cursor: &mut Cursor<'_>,
+    frame_start: usize,
+) -> Result<Frame, ZstdError> {
+    let _header = parse_frame_header(cursor)?;
+
     Err(ZstdError::StandardFrameNotImplemented {
         offset: public_offset(frame_start)?,
     })
