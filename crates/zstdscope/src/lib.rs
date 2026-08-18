@@ -8,9 +8,14 @@
 mod cursor;
 mod error;
 mod model;
+mod parser;
 
 pub use error::ZstdError;
-pub use model::ByteSpan;
+pub use model::{
+    Block, BlockType, ByteSpan, ContentChecksum, DictionaryId, Frame, FrameContentSize,
+    FrameHeader, FrameKind, SkippableFrame, StandardFrame, ZstdFile,
+};
+pub use parser::inspect;
 
 #[cfg(test)]
 mod cursor_tests;
