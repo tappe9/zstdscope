@@ -4,9 +4,11 @@ This roadmap is directional. Milestones may change as implementation and specifi
 
 ## v0.1 — Structural inspector MVP
 
+Status: **implemented; final integration review tracked in #14.**
+
 Goal: provide a safe Pure Rust parser for top-level Zstandard structure plus a usable CLI.
 
-Planned work:
+Implemented scope:
 
 - Cargo workspace with `zstdscope` and `zstdscope-cli` crates;
 - bounds-checked cursor/reader abstraction;
@@ -27,7 +29,7 @@ Planned work:
 - malformed-input tests;
 - reference-generated valid fixtures;
 - GitHub Actions for format, lint, test, and documentation checks;
-- explicit project license before release.
+- `MIT OR Apache-2.0` project licensing.
 
 Not included:
 
@@ -35,7 +37,10 @@ Not included:
 - literals/sequence parsing;
 - Huffman/FSE inspection;
 - checksum verification;
-- streaming file inspection.
+- streaming file inspection;
+- a continuous fuzz target in v0.1.
+
+The parser's malformed-input safety invariant is covered by targeted boundary and integration tests in v0.1. Continuous fuzzing remains a hardening item before a stable release.
 
 ## v0.2 — Inspector ergonomics and robustness
 
