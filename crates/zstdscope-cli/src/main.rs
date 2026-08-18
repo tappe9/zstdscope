@@ -65,11 +65,7 @@ fn inspect_file<W: Write>(path: PathBuf, json: bool, writer: &mut W) -> Result<(
     write_inspection(writer, &file, json)
 }
 
-fn write_inspection<W: Write>(
-    writer: &mut W,
-    file: &ZstdFile,
-    json: bool,
-) -> Result<(), CliError> {
+fn write_inspection<W: Write>(writer: &mut W, file: &ZstdFile, json: bool) -> Result<(), CliError> {
     if json {
         serde_json::to_writer_pretty(&mut *writer, file).map_err(CliError::Json)?;
         writer.write_all(b"\n").map_err(CliError::Output)?;
