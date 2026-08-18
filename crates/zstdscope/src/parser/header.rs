@@ -69,19 +69,14 @@ fn read_dictionary_id(
     cursor: &mut Cursor<'_>,
     flag: u8,
 ) -> Result<Option<DictionaryId>, ZstdError> {
-    let width = match flag {
-        0 => return Ok(None),
-        1 => 1,
-        2 => 2,
-        3 => 4,
-        _ => unreachable!(),
-    };
     let start = cursor.position();
-    let encoded = match width {
-        1 => u32::from(cursor.read_u8()?),
-        2 => u32::from(cursor.read_u16_le()?),
-        4 => cursor.read_u32_le()?,
-        _ => unreachable!(),
+    let offset = public_offset(start)?;
+    let (encoded, width) = match flag {
+        0 => return Ok(None),
+        1 => (u32::from(cursor.read_u8()?), 1),
+        2 => (u32::from(cursor.read_u16_le()?), 2),
+        3 => (cursor.read_u32_le()?, 4),
+        _ => return Err(ZstdError::ArithmeticOverflow { offset }),
     };
 
     Ok(Some(DictionaryId {
