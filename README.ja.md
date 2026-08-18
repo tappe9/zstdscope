@@ -1,10 +1,38 @@
 # ZstdScope
 
+[![Crates.io](https://img.shields.io/crates/v/zstdscope.svg)](https://crates.io/crates/zstdscope)
+[![docs.rs](https://docs.rs/zstdscope/badge.svg)](https://docs.rs/zstdscope)
+[![CI](https://github.com/tappe9/zstdscope/actions/workflows/ci.yml/badge.svg)](https://github.com/tappe9/zstdscope/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/zstdscope.svg)](https://github.com/tappe9/zstdscope#license)
+
 ZstdScope は、Zstandard圧縮データ形式の構造を解析・可視化するための **Pure Rust製Inspector / Parserツールキット**を目指すOSSプロジェクトです。
 
 このプロジェクトの主目的は圧縮・展開ではなく、`.zst`などのZstandardストリームに含まれるFrame、Header、Block、offset、sizeなどの構造情報を安全に取得できるAPIを提供することです。
 
-> 現在、v0.1のStructural Inspector、human-readable CLI、JSON CLIまで実装済みです。pre-1.0のためPublic APIとJSON schemaは今後意図的に変更される可能性があります。
+> **v0.1.0を[crates.io](https://crates.io/crates/zstdscope)で公開しています。** pre-1.0のためPublic APIとJSON representationは今後意図的に変更される可能性があります。
+
+**リンク:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.1.0 Release](https://github.com/tappe9/zstdscope/releases/tag/v0.1.0)
+
+## インストール
+
+Rustプロジェクトへ追加する場合:
+
+```bash
+cargo add zstdscope
+```
+
+`Cargo.toml`へ直接追加する場合:
+
+```toml
+[dependencies]
+zstdscope = "0.1"
+```
+
+Serdeによるserializationを有効にする場合:
+
+```bash
+cargo add zstdscope --features serde
+```
 
 ## v0.1で解析する範囲
 
@@ -62,9 +90,18 @@ zstdscope inspect sample.zst
 zstdscope inspect sample.zst --json
 ```
 
+リポジトリから実行する場合:
+
+```text
+cargo run -p zstdscope-cli -- inspect sample.zst
+cargo run -p zstdscope-cli -- inspect sample.zst --json
+```
+
 I/O errorやparse errorは非0で終了し、diagnosticをstderrへ出力します。pipe先が通常どおり先に閉じた場合のbroken pipeはpanicさせず正常終了として扱います。
 
-v0.1のcrate releaseでは再利用可能な`zstdscope` libraryをcrates.io向けpackage対象とします。`zstdscope-cli` package自体は現在`publish = false`で、CLI配布方法は将来のGitHub Release等で別途整備します。
+再利用可能な`zstdscope` libraryは[crates.io](https://crates.io/crates/zstdscope)で公開済みです。API documentationは[docs.rs](https://docs.rs/zstdscope)で確認できます。
+
+`zstdscope-cli` package自体は現在`publish = false`で、CLI binaryの配布はlibrary crateとは分けて今後整備します。
 
 ## JSON
 
