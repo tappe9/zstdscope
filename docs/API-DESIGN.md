@@ -2,7 +2,7 @@
 
 Status: **Accepted for v0.1 implementation**
 
-This document defines the initial public Rust API direction for ZstdScope. The API remains pre-1.0 and may evolve, but the design decisions below should be treated as the implementation contract unless superseded by a new ADR.
+This document defines the initial public Rust API direction for ZstdScope. The API remains pre-1.0 and may evolve, but the design decisions below are the implementation contract unless superseded by a new ADR.
 
 See [ADR 0004](adr/0004-v0.1-public-api-policy.md) for the decisions that resolved the initial open questions.
 
@@ -37,6 +37,8 @@ Reasons:
 - leaves room for a separate streaming API later.
 
 A file-path API such as `inspect_file()` belongs in the CLI or a future convenience layer rather than the parser core.
+
+The v0.1 parser requires at least one complete frame. `inspect(&[])` returns a typed EOF/truncation-style error rather than an empty successful `ZstdFile`. Trailing bytes that cannot form another complete frame are also errors.
 
 ## 3. Common span type
 
@@ -100,7 +102,7 @@ pub struct StandardFrame {
 
 ### 5.1 Frame header
 
-The header should expose decoded inspection values while retaining the location of fields that physically occur in the input.
+The header exposes decoded inspection values while retaining the location of fields that physically occur in the input.
 
 A representative direction is:
 
@@ -256,6 +258,8 @@ Requirements:
 
 The non-exhaustive policy allows future parser validation to add error categories without freezing the initial error taxonomy permanently.
 
+Empty input and a trailing partial top-level magic can be represented with `UnexpectedEof`; a dedicated `EmptyInput` variant is not required for v0.1.
+
 ## 10. Serialization and JSON
 
 Serialization is optional in the core crate.
@@ -272,16 +276,21 @@ When enabled, public inspection model types may derive `Serialize`. `Deserialize
 
 The CLI enables serialization support for `--json`.
 
-### JSON naming
+### JSON naming and representation
 
-Machine-readable output uses **`snake_case`**, matching Rust field names.
+Machine-readable output uses **`snake_case`** for both field names and serialized enum values.
 
-Example:
+For example, `BlockType::Compressed` must serialize as `"compressed"`, not the Serde default `"Compressed"`.
+
+The representation of enums such as `FrameKind` must be selected explicitly with serialization attributes or an explicit CLI DTO. The implementation must not accidentally make Serde defaults part of the external format. JSON output must have focused fixture/snapshot-style tests.
+
+Example field naming:
 
 ```json
 {
   "frame_content_size": 12345,
-  "content_checksum_flag": true
+  "content_checksum_flag": true,
+  "block_type": "compressed"
 }
 ```
 
@@ -289,7 +298,7 @@ Before v1.0 the JSON schema may evolve. Once releases begin, intentional JSON ch
 
 ## 11. Dependency policy
 
-The `zstdscope` parser core should keep mandatory dependencies to a minimum.
+The `zstdscope` parser core keeps mandatory dependencies to a minimum.
 
 In particular:
 
@@ -297,7 +306,7 @@ In particular:
 - no `zstd-sys`;
 - no FFI-based decompression dependency;
 - no CLI framework in the core crate;
-- `serde` should remain optional if used.
+- `serde` remains optional if used.
 
 The CLI crate may use ergonomic dependencies for argument parsing, JSON output, and presentation because those concerns are separate from parsing.
 
@@ -341,7 +350,8 @@ The initial design review resolved the following:
 1. **Dictionary ID fidelity:** preserve an explicitly encoded zero separately from an absent field.
 2. **Field spans:** expose byte spans for physically encoded frame-header fields in v0.1.
 3. **Error extensibility:** `ZstdError` is `#[non_exhaustive]`; other enums are considered individually.
-4. **JSON naming:** use `snake_case`.
+4. **JSON naming:** use `snake_case` for field names and enum values, with explicit serialization behavior.
 5. **Offset types:** public offsets use `u64`; parser indexing uses `usize` with checked conversions.
 6. **Dependencies:** keep the core dependency-light; serialization is optional and CLI dependencies stay outside the core.
 7. **Licensing:** the project is `MIT OR Apache-2.0`.
+8. **Empty input:** strict v0.1 inspection requires at least one complete frame and rejects empty input.
