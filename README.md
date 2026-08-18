@@ -99,6 +99,26 @@ fn main() -> Result<(), Box<dyn std::error::Error>> {
 
 All public offsets are zero-based byte offsets into the encoded input. Opaque block and Skippable payload bytes are represented by spans rather than copied into the returned model.
 
+### Configurable resource limits
+
+`inspect()` intentionally preserves the simple, unlimited frame/block-count behavior. Applications that inspect untrusted or externally supplied inputs can instead apply explicit metadata budgets with `inspect_with_limits()`:
+
+```rust
+use zstdscope::{InspectionLimits, inspect_with_limits};
+
+let limits = InspectionLimits {
+    max_frames: 1_024,
+    max_blocks_per_frame: 2_048,
+    max_total_blocks: 100_000,
+};
+
+let file = inspect_with_limits(&bytes, limits)?;
+```
+
+The values above are examples, not universal safe defaults; choose limits for the application's expected workload. A count equal to the configured maximum is accepted. Attempting to parse one more affected frame or block returns the typed `ZstdError::ResourceLimitExceeded` at the offset where that structure would begin.
+
+These limits bound metadata counts only. They do not cap the size of the caller-owned input slice and do not make the in-memory API streaming. Block and Skippable payloads continue to be skipped without payload-sized copies.
+
 ### Optional serialization
 
 The core crate keeps serialization optional:
@@ -209,7 +229,7 @@ Where the current reference specification and the RFC differ, the difference mus
 
 ZstdScope treats every input byte as untrusted. Parser reads and skips are bounds-checked, offset/size arithmetic is checked, opaque payloads are not copied into the inspection model, and the project forbids authored `unsafe` Rust in the core crate.
 
-The v0.1 parser and CLI are intentionally in-memory and metadata allocation scales with the number of real frames and blocks in the input. Configurable resource limits and streaming/file-backed inspection remain later hardening work.
+The parser and CLI remain intentionally in-memory. `inspect_with_limits()` can bound frame/block metadata counts for untrusted inputs, while `inspect()` retains the original unlimited count behavior. The complete input is still resident in memory; streaming/file-backed inspection remains later hardening work.
 
 See [SECURITY.md](SECURITY.md) for the project security policy.
 
