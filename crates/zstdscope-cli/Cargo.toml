@@ -10,6 +10,7 @@ description = "Command-line interface for ZstdScope."
 [[bin]]
 name = "zstdscope"
 path = "src/main.rs"
+doc = false
 
 [dependencies]
 clap = { version = "4.6", features = ["derive"] }
