@@ -1,10 +1,38 @@
 # ZstdScope
 
-ZstdScope is a pure-Rust parser and inspection toolkit for the Zstandard compressed data format.
+[![Crates.io](https://img.shields.io/crates/v/zstdscope.svg)](https://crates.io/crates/zstdscope)
+[![docs.rs](https://docs.rs/zstdscope/badge.svg)](https://docs.rs/zstdscope)
+[![CI](https://github.com/tappe9/zstdscope/actions/workflows/ci.yml/badge.svg)](https://github.com/tappe9/zstdscope/actions/workflows/ci.yml)
+[![License](https://img.shields.io/crates/l/zstdscope.svg)](https://github.com/tappe9/zstdscope#license)
+
+ZstdScope is a pure-Rust parser and structural inspection toolkit for the Zstandard compressed data format.
 
 The project is intentionally focused on **inspection**, not compression or decompression. It exposes encoded structure and source-byte metadata through a reusable Rust API and a CLI, while leaving compressed block payloads opaque.
 
-> Status: the v0.1 structural parser, human-readable CLI, and JSON CLI are implemented on `main`. The project remains pre-1.0 and the public API may still evolve intentionally.
+> **v0.1.0 is available on [crates.io](https://crates.io/crates/zstdscope).** ZstdScope remains pre-1.0, so the Rust API and JSON representation may still evolve intentionally.
+
+**Links:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.1.0 release](https://github.com/tappe9/zstdscope/releases/tag/v0.1.0)
+
+## Installation
+
+Add ZstdScope to a Rust project:
+
+```bash
+cargo add zstdscope
+```
+
+Or add it manually to `Cargo.toml`:
+
+```toml
+[dependencies]
+zstdscope = "0.1"
+```
+
+For optional Serde serialization support:
+
+```bash
+cargo add zstdscope --features serde
+```
 
 ## What ZstdScope inspects
 
@@ -119,7 +147,9 @@ I/O and parse failures return a non-zero exit status, write diagnostics to stder
 
 ### Release distribution
 
-The first crate release targets the reusable `zstdscope` library for crates.io packaging. The `zstdscope-cli` package currently has `publish = false`; CLI binary distribution is intentionally separate and can be added through GitHub Releases or another documented channel later.
+The reusable `zstdscope` Rust library is published on [crates.io](https://crates.io/crates/zstdscope), with API documentation on [docs.rs](https://docs.rs/zstdscope).
+
+The `zstdscope-cli` package currently has `publish = false`; CLI binary distribution is intentionally separate and may be added through GitHub Releases or another documented channel later.
 
 ## Workspace
 
