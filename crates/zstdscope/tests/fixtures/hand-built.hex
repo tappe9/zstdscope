@@ -1,0 +1,34 @@
+# Valid Standard Frame/header cases.
+minimal_standard=28b52ffd0000010000
+dict_id_1_explicit_zero=28b52ffd010000010000
+dict_id_2=28b52ffd02003412010000
+dict_id_4=28b52ffd030078563412010000
+fcs_1_single=28b52ffd2000010000
+fcs_2=28b52ffd40000000010000
+fcs_4=28b52ffd800000010000010000
+fcs_8=28b52ffdc0000001000000000000010000
+
+# Valid structural block/content cases.
+raw_block=28b52ffd0000110000aabb
+rle_block=28b52ffd00008b0000aa
+# The compressed payload bytes below are intentionally opaque structural bytes.
+# The reference-generated compressed fixture covers a compressor-valid Compressed block.
+compressed_block_opaque=28b52ffd00001d0000010203
+multiple_blocks=28b52ffd00008a0000aa110000bbcc
+checksum=28b52ffd0400010000efbeadde
+mixed_standard_skippable_standard=28b52ffd0000010000502a4d1802000000ccdd28b52ffd0000010000
+
+# Malformed and boundary cases.
+empty=
+invalid_magic=78563412
+truncated_frame_header=28b52ffd
+reserved_frame_header_bit=28b52ffd08
+truncated_block_header=28b52ffd00000100
+truncated_block_content=28b52ffd0000110000aa
+reserved_block_type=28b52ffd0000070000
+truncated_checksum=28b52ffd0400010000aabb
+truncated_skippable_size=502a4d180400
+truncated_skippable_payload=502a4d1804000000aabb
+trailing_partial_magic=28b52ffd0000010000aabb
+invalid_block_size=28b52ffd0000092000
+max_skippable_declared_size=502a4d18ffffffff
