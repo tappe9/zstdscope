@@ -1,6 +1,4 @@
-use zstdscope::{
-    InspectionLimits, ResourceLimitKind, ZstdError, inspect, inspect_with_limits,
-};
+use zstdscope::{InspectionLimits, ResourceLimitKind, ZstdError, inspect, inspect_with_limits};
 
 const STANDARD_MAGIC: u32 = 0xFD2F_B528;
 
