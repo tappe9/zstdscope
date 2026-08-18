@@ -1,24 +1,28 @@
 # ZstdScope Public API Design
 
-Status: **Draft**
+Status: **Accepted for v0.1 implementation**
 
-This document proposes the first public Rust API for discussion. It is intentionally conservative because API names and semantics become costly to change once the crate is published.
+This document defines the initial public Rust API direction for ZstdScope. The API remains pre-1.0 and may evolve, but the design decisions below should be treated as the implementation contract unless superseded by a new ADR.
+
+See [ADR 0004](adr/0004-v0.1-public-api-policy.md) for the decisions that resolved the initial open questions.
 
 ## 1. Design principles
 
 The public API should:
 
 - describe encoded Zstandard structure rather than decompressed semantics;
-- make byte locations explicit;
+- preserve byte-level distinctions that matter to an inspector;
+- make source byte locations explicit;
 - distinguish stored lengths from decoded/logical lengths;
-- avoid borrowing payload slices in returned models;
+- avoid copying opaque payload bytes into returned models;
 - expose typed errors;
 - remain convenient for CLI and JSON consumers;
+- keep mandatory parser-core dependencies minimal;
 - avoid promising unstable internals before v1.0.
 
 ## 2. Entry point
 
-Proposed initial entry point:
+The initial entry point is:
 
 ```rust
 pub fn inspect(input: &[u8]) -> Result<ZstdFile, ZstdError>;
@@ -32,7 +36,7 @@ Reasons:
 - compatible with browser/WASM byte buffers;
 - leaves room for a separate streaming API later.
 
-A file-path API such as `inspect_file()` should live in the CLI or a future convenience layer rather than the parser core.
+A file-path API such as `inspect_file()` belongs in the CLI or a future convenience layer rather than the parser core.
 
 ## 3. Common span type
 
@@ -44,7 +48,7 @@ pub struct ByteSpan {
 }
 ```
 
-Possible convenience methods:
+Expected convenience methods:
 
 ```rust
 impl ByteSpan {
@@ -53,7 +57,9 @@ impl ByteSpan {
 }
 ```
 
-`end()` should use checked arithmetic rather than silently wrap.
+`end()` must use checked arithmetic rather than silently wrap.
+
+ZstdScope is an inspector, so source spans are part of the product rather than an implementation detail.
 
 ## 4. Top-level model
 
@@ -78,7 +84,7 @@ pub enum FrameKind {
 }
 ```
 
-`Frame::span` represents the complete encoded frame, including magic number and optional checksum.
+`Frame::span` represents the complete encoded frame, including its magic number and optional checksum.
 
 ## 5. Standard frame model
 
@@ -92,39 +98,57 @@ pub struct StandardFrame {
 }
 ```
 
-### Frame header
+### 5.1 Frame header
 
-The header should expose values useful for inspection while retaining raw descriptor information:
+The header should expose decoded inspection values while retaining the location of fields that physically occur in the input.
+
+A representative direction is:
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq)]
 pub struct FrameHeader {
     pub span: ByteSpan,
     pub descriptor: u8,
-    pub frame_content_size: Option<u64>,
+    pub descriptor_span: ByteSpan,
+    pub window_descriptor_span: Option<ByteSpan>,
+    pub frame_content_size: Option<FrameContentSize>,
+    pub dictionary_id: Option<DictionaryId>,
     pub window_size: u64,
-    pub dictionary_id: Option<u32>,
     pub content_checksum_flag: bool,
     pub single_segment: bool,
     pub unused_bit: bool,
 }
+
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub struct FrameContentSize {
+    pub value: u64,
+    pub span: ByteSpan,
+}
 ```
 
-Questions to resolve during implementation review:
+Exact type names may be refined during implementation, but v0.1 must retain field-specific spans for physically encoded optional header fields.
 
-1. Should field-specific spans be exposed in v0.1, or added later when the hex viewer is implemented?
-2. Should `dictionary_id` map encoded zero to `None`, or should the API preserve both `encoded_dictionary_id: Option<u32>` and a semantic helper?
+### 5.2 Dictionary ID fidelity
 
-The preferred direction is to avoid losing encoded information. One option is:
+The encoded representation must be preserved.
 
 ```rust
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
 pub struct DictionaryId {
     pub encoded: u32,
     pub span: ByteSpan,
 }
 ```
 
-with a helper describing whether the ID is semantically specified. This decision should be made before code is published.
+`FrameHeader::dictionary_id` uses `Option<DictionaryId>`:
+
+- `None` means the Dictionary ID field was absent;
+- `Some(DictionaryId { encoded: 0, .. })` means a zero value was explicitly encoded;
+- a non-zero value preserves the encoded Dictionary ID.
+
+Although encoded zero has the same Dictionary-ID meaning as an unspecified ID for decompression, an inspector must not erase the byte-level distinction.
+
+A semantic convenience helper may later be added, but the stored representation remains observable.
 
 ## 6. Block model
 
@@ -150,21 +174,13 @@ pub enum BlockType {
 
 The distinction between `declared_size` and `encoded_content_size` is required:
 
-- Raw: both values are `Block_Size`.
-- Compressed: both values are `Block_Size`.
-- RLE: `declared_size` is the decompressed repetition count, while `encoded_content_size` is `1`.
+- Raw: both values are `Block_Size`;
+- Compressed: both values are `Block_Size`;
+- RLE: `declared_size` is the decompressed repetition count while `encoded_content_size` is `1`.
 
-This naming prevents consumers from making incorrect offset calculations for RLE blocks.
+This prevents consumers from calculating incorrect source offsets for RLE blocks.
 
-A convenience method may be useful:
-
-```rust
-impl Block {
-    pub fn encoded_span(&self) -> Option<ByteSpan>;
-}
-```
-
-but v0.1 should avoid unnecessary convenience surface until use cases are proven.
+`BlockType` mirrors the supported valid block types in the current format and is not automatically marked `#[non_exhaustive]`.
 
 ## 7. Content checksum model
 
@@ -176,7 +192,7 @@ pub struct ContentChecksum {
 }
 ```
 
-The API must document that `value` is the stored checksum field. ZstdScope does not verify it against decoded content in v0.1.
+`value` is the checksum value stored in the encoded frame. ZstdScope v0.1 does not verify it against decoded content because the core does not decompress payload data.
 
 ## 8. Skippable frame model
 
@@ -192,18 +208,17 @@ pub struct SkippableFrame {
 }
 ```
 
-The exact 4-byte magic number should be retained rather than represented only as a boolean "skippable" marker. This preserves information useful to tooling.
+The exact four-byte magic value is retained. `variant` identifies the low-nibble variant among the 16 valid skippable magic values.
 
-`variant` represents the low nibble distinguishing the 16 valid skippable magic values.
-
-The payload itself is not copied into the model.
+The payload itself is not copied into the result model.
 
 ## 9. Error API
 
-Proposed direction:
+Initial direction:
 
 ```rust
 #[derive(Debug, Clone, PartialEq, Eq)]
+#[non_exhaustive]
 pub enum ZstdError {
     UnexpectedEof {
         offset: u64,
@@ -233,16 +248,19 @@ pub enum ZstdError {
 
 Requirements:
 
+- `ZstdError` is `#[non_exhaustive]`;
 - implement `std::error::Error`;
 - implement useful `Display` messages;
-- preserve structured fields;
-- keep the error enum `#[non_exhaustive]` under consideration so future parser validation can add variants without forcing a major version bump.
+- preserve structured fields so callers do not need to parse strings;
+- include a zero-based source offset where meaningful.
 
-Before choosing `#[non_exhaustive]`, document the ergonomics trade-off for downstream exhaustive matching.
+The non-exhaustive policy allows future parser validation to add error categories without freezing the initial error taxonomy permanently.
 
-## 10. Serialization
+## 10. Serialization and JSON
 
-Proposed optional Cargo feature:
+Serialization is optional in the core crate.
+
+Expected Cargo feature direction:
 
 ```toml
 [features]
@@ -250,29 +268,59 @@ default = []
 serde = ["dep:serde"]
 ```
 
-When enabled, public inspection model types can derive `Serialize`. Deserialization is not automatically required; ZstdScope's primary job is parsing encoded bytes, not accepting arbitrary JSON as trusted model state.
+When enabled, public inspection model types may derive `Serialize`. `Deserialize` is not required for v0.1 because ZstdScope parses encoded bytes rather than accepting JSON as source truth.
 
-Therefore the preferred v0.1 direction is:
+The CLI enables serialization support for `--json`.
 
-```text
-Serialize: yes, behind optional feature
-Deserialize: only if a concrete use case appears
+### JSON naming
+
+Machine-readable output uses **`snake_case`**, matching Rust field names.
+
+Example:
+
+```json
+{
+  "frame_content_size": 12345,
+  "content_checksum_flag": true
+}
 ```
 
-The CLI enables `serde` and performs JSON rendering in the CLI crate.
+Before v1.0 the JSON schema may evolve. Once releases begin, intentional JSON changes should be recorded in the changelog.
 
-## 11. Versioning policy
+## 11. Dependency policy
+
+The `zstdscope` parser core should keep mandatory dependencies to a minimum.
+
+In particular:
+
+- no `libzstd`;
+- no `zstd-sys`;
+- no FFI-based decompression dependency;
+- no CLI framework in the core crate;
+- `serde` should remain optional if used.
+
+The CLI crate may use ergonomic dependencies for argument parsing, JSON output, and presentation because those concerns are separate from parsing.
+
+## 12. Offset types
+
+Public byte offsets and lengths use `u64`.
+
+Internal indexing into a byte slice uses `usize`, with checked conversion when crossing the public/internal boundary.
+
+This avoids exposing platform-sized offsets in the public inspection model while preserving safe indexing in Rust.
+
+## 13. Versioning policy
 
 Before v1.0:
 
-- public API is considered evolving;
-- breaking changes should still be explained in `CHANGELOG.md` once releases begin;
-- avoid publishing internal parser types solely because they happen to exist;
-- prefer a small stable inspection model over a large one-to-one mapping of every internal function.
+- the public API is considered evolving;
+- breaking changes should still be intentional and documented once releases begin;
+- internal parser types should not become public solely for implementation convenience;
+- accepted architecture decisions should be changed through a new ADR rather than silently diverging from documentation.
 
 At v1.0, the crate should document which model fields and JSON representations are stability commitments.
 
-## 12. Deferred APIs
+## 14. Deferred APIs
 
 The following are intentionally deferred:
 
@@ -286,14 +334,14 @@ verify_checksum(...)
 
 Adding these later is easier than removing a prematurely generalized abstraction.
 
-## 13. Open API questions
+## 15. Resolved v0.1 policy
 
-The first implementation PR should resolve these explicitly:
+The initial design review resolved the following:
 
-1. **Dictionary ID fidelity:** preserve encoded zero distinctly, or normalize it?
-2. **Field spans:** expose a span for every optional frame-header field in v0.1 or only aggregate header span?
-3. **Error extensibility:** use `#[non_exhaustive]` on `ZstdError` and/or public enums?
-4. **JSON field naming:** Rust `snake_case` or a stable external naming convention such as `camelCase`?
-5. **Input size type:** keep public offsets as `u64` while parser indexing uses `usize`?
-
-No code should harden these unresolved choices before they are reviewed.
+1. **Dictionary ID fidelity:** preserve an explicitly encoded zero separately from an absent field.
+2. **Field spans:** expose byte spans for physically encoded frame-header fields in v0.1.
+3. **Error extensibility:** `ZstdError` is `#[non_exhaustive]`; other enums are considered individually.
+4. **JSON naming:** use `snake_case`.
+5. **Offset types:** public offsets use `u64`; parser indexing uses `usize` with checked conversions.
+6. **Dependencies:** keep the core dependency-light; serialization is optional and CLI dependencies stay outside the core.
+7. **Licensing:** the project is `MIT OR Apache-2.0`.
