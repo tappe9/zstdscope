@@ -1,6 +1,6 @@
 # ADR 0003: Start with an in-memory byte-slice inspection API
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-18
 
 ## Context
