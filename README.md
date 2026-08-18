@@ -1,10 +1,10 @@
 # ZstdScope
 
-ZstdScope is a proposed pure-Rust parser and inspection toolkit for the Zstandard compressed data format.
+ZstdScope is a project for a pure-Rust parser and inspection toolkit for the Zstandard compressed data format.
 
 The project is intentionally focused on **inspection**, not compression or decompression. Its goal is to expose the structure and metadata of Zstandard streams in a safe, reusable API that can power a CLI, future WebAssembly tooling, and other developer tools.
 
-> Status: design phase. No parser implementation is included yet.
+> Status: the initial v0.1 requirements, architecture, and public API direction are accepted. Parser implementation has not started yet.
 
 ## Goals
 
@@ -12,9 +12,9 @@ ZstdScope aims to:
 
 - parse Zstandard streams without decompressing their payloads;
 - expose standard frames, skippable frames, frame headers, block headers, byte offsets, and sizes;
-- preserve byte-level encoding details that are useful to inspection tools;
+- preserve byte-level distinctions useful to inspection tools;
 - provide precise diagnostics for malformed or unsupported input;
-- remain safe on untrusted byte input and avoid panics from malformed data;
+- remain safe on untrusted byte input and avoid parser panics from malformed data;
 - keep the parsing core independent from the CLI and future user interfaces;
 - remain suitable for a future `wasm32` target.
 
@@ -29,24 +29,26 @@ ZstdScope is not intended to be:
 
 ## Planned v0.1 scope
 
-The first implementation milestone is expected to inspect:
+The first implementation milestone will inspect:
 
 - Zstandard standard-frame magic numbers;
 - skippable-frame magic numbers;
 - frame header descriptor fields;
 - window size;
 - frame content size;
-- dictionary ID, including the distinction between an absent field and an explicitly encoded zero;
+- Dictionary ID, preserving an explicitly encoded zero separately from an absent field;
 - content checksum presence and stored checksum value;
 - block headers;
-- raw, RLE, and compressed block types;
+- Raw, RLE, and Compressed block types;
 - last-block markers;
-- byte spans for encoded fields, frames, and blocks;
+- frame, header-field, and block source spans;
 - concatenated frames.
 
 Parsing literals, sequences, Huffman tables, and FSE tables inside compressed blocks is explicitly deferred beyond v0.1.
 
-## Proposed workspace
+The strict v0.1 parser requires at least one complete frame. Empty input, truncated structures, unknown top-level magic, and trailing partial frames are parse errors.
+
+## Workspace
 
 ```text
 zstdscope/
@@ -57,15 +59,19 @@ zstdscope/
 └── ARCHITECTURE.md
 ```
 
-The initial public API is expected to center on a function similar to:
+The initial public API centers on:
 
 ```rust
 pub fn inspect(data: &[u8]) -> Result<ZstdFile, ZstdError>;
 ```
 
-The core crate should keep mandatory dependencies minimal. Serialization is expected to be optional, while CLI-specific dependencies remain in the CLI crate.
+The accepted v0.1 API direction is documented in [Public API design](docs/API-DESIGN.md). The project remains pre-1.0, so future breaking changes may still occur intentionally and with documentation.
 
-The API is still pre-implementation and may evolve before the first release.
+## JSON
+
+The CLI will support machine-readable inspection output with `--json`.
+
+JSON field names and serialized enum values use `snake_case`. The representation is explicitly defined and tested rather than accidentally depending on serialization-library defaults.
 
 ## Documentation
 
@@ -86,15 +92,21 @@ ZstdScope is designed against authoritative Zstandard format documentation:
 
 Where the current reference specification and the RFC differ, the difference must be documented before implementation behavior is chosen.
 
+## Safety
+
+ZstdScope treats every input byte as untrusted. The initial parser design requires bounds-checked reads, checked offset/size arithmetic, no opaque payload copies, and no project-authored `unsafe` Rust.
+
+See [SECURITY.md](SECURITY.md) for the project security policy.
+
 ## Contributing
 
-The project is being designed in public. See [CONTRIBUTING.md](CONTRIBUTING.md) for the expected workflow.
+The project is developed in public. See [CONTRIBUTING.md](CONTRIBUTING.md) for the expected workflow.
 
 ## License
 
-ZstdScope is licensed under either of the following, at your option:
+ZstdScope is dual-licensed under either of:
 
-- [Apache License, Version 2.0](LICENSE-APACHE)
-- [MIT License](LICENSE-MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE)); or
+- MIT license ([LICENSE-MIT](LICENSE-MIT)).
 
-Unless explicitly stated otherwise, contributions intentionally submitted for inclusion in ZstdScope are provided under the same dual-license terms.
+You may choose either license when using or redistributing ZstdScope.
