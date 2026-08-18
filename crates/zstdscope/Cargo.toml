@@ -1,0 +1,12 @@
+[package]
+name = "zstdscope"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+description = "A pure Rust parser and inspection toolkit for the Zstandard compressed data format."
+
+[features]
+default = []
+
+[dependencies]

@@ -1,0 +1,15 @@
+[package]
+name = "zstdscope-cli"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+repository.workspace = true
+publish = false
+description = "Command-line interface for ZstdScope."
+
+[[bin]]
+name = "zstdscope"
+path = "src/main.rs"
+
+[dependencies]
+zstdscope = { path = "../zstdscope" }
