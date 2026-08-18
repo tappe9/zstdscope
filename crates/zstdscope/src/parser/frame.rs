@@ -1,4 +1,7 @@
-use super::{block::parse_blocks, header::parse_frame_header};
+use super::{
+    block::{decoded_size_bounds, parse_blocks},
+    header::parse_frame_header,
+};
 use crate::{
     ByteSpan, ContentChecksum, Frame, FrameKind, SkippableFrame, StandardFrame, ZstdError,
     ZstdFile, cursor::Cursor,
@@ -59,6 +62,7 @@ fn parse_standard_frame(
 ) -> Result<Frame, ZstdError> {
     let header = parse_frame_header(cursor)?;
     let blocks = parse_blocks(cursor, header.window_size)?;
+    validate_frame_content_size(&header, &blocks)?;
     let content_checksum = parse_content_checksum(cursor, header.content_checksum_flag)?;
 
     Ok(Frame {
@@ -71,6 +75,29 @@ fn parse_standard_frame(
             content_checksum,
         }),
     })
+}
+
+fn validate_frame_content_size(
+    header: &crate::FrameHeader,
+    blocks: &[crate::Block],
+) -> Result<(), ZstdError> {
+    let Some(frame_content_size) = header.frame_content_size else {
+        return Ok(());
+    };
+
+    let (minimum, maximum) = decoded_size_bounds(blocks, header.window_size)?;
+    let declared = u128::from(frame_content_size.value);
+
+    if declared < minimum || declared > maximum {
+        return Err(ZstdError::FrameContentSizeMismatch {
+            offset: frame_content_size.span.offset,
+            declared: frame_content_size.value,
+            minimum,
+            maximum,
+        });
+    }
+
+    Ok(())
 }
 
 fn parse_content_checksum(

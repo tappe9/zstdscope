@@ -2,6 +2,7 @@ use crate::{Block, BlockType, ByteSpan, ZstdError, cursor::Cursor};
 
 const BLOCK_HEADER_SIZE: usize = 3;
 const FORMAT_BLOCK_MAXIMUM_SIZE: u32 = 128 * 1024;
+const MINIMUM_COMPRESSED_BLOCK_SIZE: u32 = 2;
 
 pub(super) fn parse_blocks(
     cursor: &mut Cursor<'_>,
@@ -19,6 +20,38 @@ pub(super) fn parse_blocks(
             return Ok(blocks);
         }
     }
+}
+
+pub(super) fn decoded_size_bounds(
+    blocks: &[Block],
+    window_size: u64,
+) -> Result<(u128, u128), ZstdError> {
+    let maximum_block_size = u128::from(window_size.min(u64::from(FORMAT_BLOCK_MAXIMUM_SIZE)));
+    let mut minimum = 0_u128;
+    let mut maximum = 0_u128;
+
+    for block in blocks {
+        let offset = block.header_span.offset;
+        let exact = u128::from(block.declared_size);
+
+        match block.block_type {
+            BlockType::Raw | BlockType::Rle => {
+                minimum = minimum
+                    .checked_add(exact)
+                    .ok_or(ZstdError::ArithmeticOverflow { offset })?;
+                maximum = maximum
+                    .checked_add(exact)
+                    .ok_or(ZstdError::ArithmeticOverflow { offset })?;
+            }
+            BlockType::Compressed => {
+                maximum = maximum
+                    .checked_add(maximum_block_size)
+                    .ok_or(ZstdError::ArithmeticOverflow { offset })?;
+            }
+        }
+    }
+
+    Ok((minimum, maximum))
 }
 
 fn parse_block(cursor: &mut Cursor<'_>, index: usize, maximum: u32) -> Result<Block, ZstdError> {
@@ -39,6 +72,13 @@ fn parse_block(cursor: &mut Cursor<'_>, index: usize, maximum: u32) -> Result<Bl
     let declared_size = header >> 3;
 
     validate_block_size(declared_size, maximum, header_offset)?;
+    if block_type == BlockType::Compressed && declared_size < MINIMUM_COMPRESSED_BLOCK_SIZE {
+        return Err(ZstdError::InvalidCompressedBlockSize {
+            offset: header_offset,
+            size: declared_size,
+            minimum: MINIMUM_COMPRESSED_BLOCK_SIZE,
+        });
+    }
 
     let encoded_content_size = match block_type {
         BlockType::Raw | BlockType::Compressed => declared_size,

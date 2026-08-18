@@ -91,6 +91,24 @@ fn compressed_content_is_opaque_and_parsing_stops_after_the_last_block() {
 }
 
 #[test]
+fn compressed_blocks_require_at_least_two_content_bytes() {
+    // A Compressed Block needs at least a Literals Section header and Number_of_Sequences byte.
+    for size in 0..=1 {
+        let mut bytes = block_header(true, 2, size).to_vec();
+        bytes.resize(bytes.len() + size as usize, 0);
+
+        assert_eq!(
+            parse_blocks_with_prefix(&bytes, 1024).unwrap_err(),
+            ZstdError::InvalidCompressedBlockSize {
+                offset: 6,
+                size,
+                minimum: 2,
+            }
+        );
+    }
+}
+
+#[test]
 fn reserved_block_type_is_rejected_at_the_header_offset() {
     // Zstandard format, Block_Type value 3 is reserved and represents corrupted data.
     let bytes = block_header(true, 3, 0);

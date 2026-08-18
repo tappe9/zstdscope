@@ -25,7 +25,7 @@ ZstdScope v0.1 recognizes two top-level frame classes:
 1. standard Zstandard frames;
 2. skippable frames.
 
-The v0.1 parser is strict. Inspection continues frame by frame until the input is exhausted. Unknown top-level magic is a parse error. An empty input is also invalid because it contains no frame; the implementation should report a typed truncation/EOF-style parse error rather than return an empty successful model.
+The v0.1 parser is strict for the structural envelope it implements. Inspection continues frame by frame until the input is exhausted. Unknown top-level magic is a parse error. An empty input is also invalid because it contains no frame; the implementation reports a typed truncation/EOF-style parse error rather than returning an empty successful model.
 
 ## 3. Standard Zstandard frame
 
@@ -49,7 +49,7 @@ The standard magic number is:
 
 It occupies four bytes and is encoded little-endian.
 
-ZstdScope should retain its byte span even though the value itself is fixed, because source mapping is a core Inspector feature.
+ZstdScope retains its byte span even though the value itself is fixed, because source mapping is a core Inspector feature.
 
 ## 4. Frame header
 
@@ -97,7 +97,17 @@ A missing field means **unknown size**, not zero.
 
 Important special case: the two-byte representation stores a value that requires adding the format-defined offset of 256 when decoded.
 
-ZstdScope preserves both the decoded value and the source byte span. All width and value arithmetic must be checked before being converted to public model types.
+ZstdScope preserves both the decoded value and the source byte span. All width and value arithmetic is checked before being converted to public model types.
+
+When Frame Content Size is present, it must be compatible with the decoded size of the frame. v0.1 validates the portion of this invariant that can be established without decompressing Compressed Blocks:
+
+- Raw blocks contribute exactly `Block_Size` decoded bytes;
+- RLE blocks contribute exactly `Block_Size` decoded bytes;
+- Compressed blocks contribute an unknown decoded size in the inclusive range `0..=Block_Maximum_Size`.
+
+The parser accumulates checked minimum and maximum decoded-size bounds across all blocks. A declared Frame Content Size outside those bounds is malformed and is rejected with a typed error. When a frame contains only Raw and RLE blocks, the minimum and maximum are equal, so this check becomes exact equality.
+
+This bound check is deliberately conservative for Compressed Blocks. It does not claim to validate their internal literals, sequences, or exact decompressed size.
 
 ## 6. Single Segment and Window Size
 
@@ -118,7 +128,7 @@ window_add  = (window_base / 8) * mantissa
 window_size = window_base + window_add
 ```
 
-ZstdScope should implement this with checked arithmetic and unit tests for minimum, maximum, and representative values.
+ZstdScope implements this with checked arithmetic and unit tests for minimum, maximum, and representative values.
 
 When a Window Descriptor is physically present, its source span is exposed by the inspection model.
 
@@ -203,7 +213,7 @@ encoded Block Content length = 1 byte
 Block_Size = decompressed repetition count
 ```
 
-Therefore ZstdScope must not use one ambiguous field to represent both concepts. The public model exposes both `declared_size` and `encoded_content_size`, and offset calculations must use encoded content length.
+Therefore ZstdScope must not use one ambiguous field to represent both concepts. The public model exposes both `declared_size` and `encoded_content_size`, and offset calculations use encoded content length.
 
 ### Last Block
 
@@ -213,9 +223,9 @@ The parser continues reading block headers until the Last Block bit is set. Only
 
 The format limits block size using the effective frame window and the format's 128 KiB block ceiling.
 
-ZstdScope should validate size rules that can be determined from header metadata without decompressing the block.
+ZstdScope validates size rules that can be determined from header metadata without decompressing the block.
 
-Care is required for RLE because its `Block_Size` describes decoded length while its encoded content is one byte.
+Care is required for RLE because its `Block_Size` describes decoded length while its encoded content is one byte. Both the encoded Block Content and the decoded block size must fit the frame's Block Maximum Size.
 
 ## 11. Compressed block internals
 
@@ -223,12 +233,21 @@ A Compressed block contains further Zstandard structures, including literals and
 
 These internals are **opaque in v0.1**.
 
-ZstdScope v0.1 only needs to:
+However, opacity does not mean every encoded length can represent a Compressed Block. Even without decoding internals, a Compressed Block Content must have room for at least:
+
+1. a Literals Section header;
+2. the Sequences Section `Number_of_Sequences` field.
+
+Therefore its encoded `Block_Size` must be at least 2 bytes. v0.1 rejects Compressed blocks with `Block_Size` 0 or 1 as structurally impossible.
+
+Beyond that outer minimum, ZstdScope v0.1 only needs to:
 
 1. recognize the block type;
 2. validate the encoded length against available input and structural constraints;
 3. record offsets and sizes;
 4. skip the encoded content safely.
+
+The parser does not validate the Literals Section, Sequences Section, Huffman tables, FSE tables, or exact decompressed output of a Compressed Block in v0.1.
 
 Future versions may add nested inspection without changing the fundamental frame/block model.
 
@@ -301,10 +320,12 @@ For bit-level rules, tests should include a short comment pointing to the corres
 
 - descriptor flag widths;
 - two-byte Frame Content Size offset behavior;
+- Frame Content Size decoded-size bounds;
 - Single Segment behavior;
 - Dictionary ID absence versus explicitly encoded zero;
 - skippable magic range;
 - RLE Block Size semantics;
+- minimum Compressed Block envelope size;
 - reserved bits and block types;
 - empty and truncated input behavior.
 

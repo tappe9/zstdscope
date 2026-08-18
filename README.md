@@ -13,17 +13,18 @@ The current v0.1 scope includes:
 - Standard and all 16 Skippable Frame magic values;
 - concatenated frames with exact frame boundaries;
 - Frame Header descriptor fields and derived window size;
-- Frame Content Size, including all encoded widths;
+- Frame Content Size, including all encoded widths and contradictions detectable from block-level decoded-size bounds;
 - Dictionary ID, preserving an explicitly encoded zero separately from an absent field;
 - Raw, RLE, and Compressed block headers and encoded content spans;
 - the distinction between RLE declared size and its one-byte encoded content;
+- structural rejection of Compressed blocks too small to contain their mandatory outer section headers;
 - stored content checksum value and span, without claiming checksum verification;
 - zero-based source spans for major encoded fields;
 - typed, location-aware parse errors for malformed and truncated input.
 
 Parsing literals, sequences, Huffman tables, FSE tables, and other compressed-block internals is intentionally deferred beyond v0.1.
 
-The parser is strict: it requires at least one complete frame and consumes the entire input. Empty input, malformed structures, unknown top-level magic, and trailing partial frames are errors.
+The parser is strict for the structural envelope implemented by v0.1: it requires at least one complete frame and consumes the entire input. Empty input, malformed structures that v0.1 can validate, unknown top-level magic, reserved encodings, impossible structural sizes, and trailing partial frames are errors. Compressed-block internals and content-checksum validity are intentionally not validated in v0.1.
 
 ## Rust library
 
@@ -114,7 +115,11 @@ cargo run -p zstdscope-cli -- inspect sample.zst --json
 
 JSON field names and serialized enum values use explicit `snake_case` representations. `FrameKind` uses a tagged `type` / `data` shape, and Inspector-specific distinctions such as absent versus explicitly encoded zero Dictionary IDs and RLE declared versus encoded sizes are preserved.
 
-I/O and parse failures return a non-zero exit status, write diagnostics to stderr, and do not emit partial-success JSON.
+I/O and parse failures return a non-zero exit status, write diagnostics to stderr, and do not emit partial-success JSON. Output write failures are handled without panicking; a downstream process closing a pipe normally is treated as a normal CLI termination.
+
+### Release distribution
+
+The first crate release targets the reusable `zstdscope` library for crates.io packaging. The `zstdscope-cli` package currently has `publish = false`; CLI binary distribution is intentionally separate and can be added through GitHub Releases or another documented channel later.
 
 ## Workspace
 
@@ -136,7 +141,7 @@ ZstdScope aims to:
 - inspect Zstandard structure without decompressing payloads;
 - preserve byte-level distinctions useful to inspection and hex-viewer tooling;
 - provide precise diagnostics for malformed or unsupported input;
-- remain safe on untrusted byte input;
+- remain safe on untrusted byte input within the documented in-memory/resource model;
 - keep parsing independent from filesystem, terminal, and CLI concerns;
 - keep mandatory core dependencies small;
 - remain suitable for a future `wasm32` target.
@@ -173,6 +178,8 @@ Where the current reference specification and the RFC differ, the difference mus
 ## Safety
 
 ZstdScope treats every input byte as untrusted. Parser reads and skips are bounds-checked, offset/size arithmetic is checked, opaque payloads are not copied into the inspection model, and the project forbids authored `unsafe` Rust in the core crate.
+
+The v0.1 parser and CLI are intentionally in-memory and metadata allocation scales with the number of real frames and blocks in the input. Configurable resource limits and streaming/file-backed inspection remain later hardening work.
 
 See [SECURITY.md](SECURITY.md) for the project security policy.
 
