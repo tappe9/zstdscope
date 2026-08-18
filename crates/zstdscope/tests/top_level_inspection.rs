@@ -34,7 +34,7 @@ fn one_to_three_trailing_magic_bytes_are_not_ignored() {
 
 #[test]
 fn invalid_top_level_magic_is_typed_and_location_aware() {
-    let magic = 0x1234_5678;
+    let magic: u32 = 0x1234_5678;
 
     assert_eq!(
         inspect(&magic.to_le_bytes()).unwrap_err(),
