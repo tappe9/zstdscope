@@ -203,6 +203,40 @@ fn concatenated_skippable_frames_preserve_order_indexes_and_offsets() {
 }
 
 #[test]
+fn mixed_standard_skippable_standard_stream_preserves_exact_boundaries() {
+    // ZSTD-FORMAT section 13: each concatenated top-level frame is independently delimited.
+    let first = minimal_standard_frame();
+    let middle = skippable_frame(SKIPPABLE_MAGIC_MIN + 5, &[0xCC, 0xDD]);
+    let third = minimal_standard_frame();
+    let input = [first, middle, third].concat();
+
+    let file = inspect(&input).unwrap();
+
+    assert_eq!(file.frames.len(), 3);
+    assert_eq!(file.frames[0].index, 0);
+    assert_eq!(file.frames[0].span.offset, 0);
+    assert_eq!(file.frames[0].span.length, 9);
+    assert!(matches!(file.frames[0].kind, FrameKind::Standard(_)));
+
+    assert_eq!(file.frames[1].index, 1);
+    assert_eq!(file.frames[1].span.offset, 9);
+    assert_eq!(file.frames[1].span.length, 10);
+    let FrameKind::Skippable(skippable) = &file.frames[1].kind else {
+        panic!("middle frame was not skippable");
+    };
+    assert_eq!(skippable.variant, 5);
+    assert_eq!(skippable.size_field_span.offset, 13);
+    assert_eq!(skippable.size_field_span.length, 4);
+    assert_eq!(skippable.payload_span.offset, 17);
+    assert_eq!(skippable.payload_span.length, 2);
+
+    assert_eq!(file.frames[2].index, 2);
+    assert_eq!(file.frames[2].span.offset, 19);
+    assert_eq!(file.frames[2].span.length, 9);
+    assert!(matches!(file.frames[2].kind, FrameKind::Standard(_)));
+}
+
+#[test]
 fn trailing_partial_magic_after_complete_frame_is_an_error() {
     for trailing_len in 1..=3 {
         let mut input = skippable_frame(SKIPPABLE_MAGIC_MIN, &[]);
@@ -214,6 +248,24 @@ fn trailing_partial_magic_after_complete_frame_is_an_error() {
                 offset: 8,
                 needed: 4,
                 remaining: trailing_len,
+            }
+        );
+    }
+}
+
+#[test]
+fn truncated_skippable_size_field_is_a_typed_eof_at_the_size_field() {
+    // ZSTD-FORMAT section 12: the skippable Frame Size is exactly four little-endian bytes.
+    for remaining in 0..=3 {
+        let mut input = SKIPPABLE_MAGIC_MIN.to_le_bytes().to_vec();
+        input.extend_from_slice(&[0xAA, 0xBB, 0xCC][..remaining]);
+
+        assert_eq!(
+            inspect(&input).unwrap_err(),
+            ZstdError::UnexpectedEof {
+                offset: 4,
+                needed: 4,
+                remaining,
             }
         );
     }
@@ -234,6 +286,31 @@ fn truncated_skippable_payload_is_a_typed_eof() {
             remaining: 2,
         }
     );
+}
+
+#[test]
+fn maximum_declared_skippable_payload_is_rejected_without_payload_allocation() {
+    // The parser must validate/skip the declared size without allocating a payload-sized buffer.
+    let mut input = Vec::new();
+    input.extend_from_slice(&SKIPPABLE_MAGIC_MIN.to_le_bytes());
+    input.extend_from_slice(&u32::MAX.to_le_bytes());
+
+    let expected = match usize::try_from(u32::MAX) {
+        Ok(needed) => ZstdError::UnexpectedEof {
+            offset: 8,
+            needed,
+            remaining: 0,
+        },
+        Err(_) => ZstdError::ArithmeticOverflow { offset: 8 },
+    };
+
+    assert_eq!(inspect(&input).unwrap_err(), expected);
+}
+
+fn minimal_standard_frame() -> Vec<u8> {
+    let mut frame = STANDARD_MAGIC.to_le_bytes().to_vec();
+    frame.extend_from_slice(&[0x00, 0x00, 0x01, 0x00, 0x00]);
+    frame
 }
 
 fn skippable_frame(magic: u32, payload: &[u8]) -> Vec<u8> {
