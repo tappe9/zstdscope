@@ -13,6 +13,8 @@ Contributions should preserve these project principles:
 - treat input bytes as untrusted;
 - prefer explicit checked parsing over clever bit manipulation;
 - avoid `unsafe` in project code unless an accepted ADR justifies it;
+- preserve byte-level encoding details that are useful to inspection consumers;
+- keep mandatory core dependencies minimal;
 - do not add decompression behavior unless the project scope is explicitly expanded;
 - add tests for every format edge case or bug fix.
 
@@ -61,6 +63,14 @@ Additional fuzz or fixture validation commands will be documented when those tar
 Before v1.0 the API may evolve, but breaking changes should still be intentional and explained.
 
 Do not expose internal parser types merely to make implementation convenient. Public types should serve inspection consumers.
+
+Accepted API policy decisions are recorded in the ADRs under `docs/adr/`. Changing an accepted policy should be proposed as a new ADR rather than silently diverging from the documented design.
+
+## Contribution licensing
+
+ZstdScope is licensed under **MIT OR Apache-2.0**. Unless you explicitly state otherwise, any contribution intentionally submitted for inclusion in ZstdScope is provided under the same dual-license terms, without additional conditions.
+
+See `LICENSE-MIT` and `LICENSE-APACHE` for the full license texts.
 
 ## Security issues
 
