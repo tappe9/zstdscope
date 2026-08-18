@@ -1,21 +1,144 @@
 # ZstdScope
 
-ZstdScope is a project for a pure-Rust parser and inspection toolkit for the Zstandard compressed data format.
+ZstdScope is a pure-Rust parser and inspection toolkit for the Zstandard compressed data format.
 
-The project is intentionally focused on **inspection**, not compression or decompression. Its goal is to expose the structure and metadata of Zstandard streams in a safe, reusable API that can power a CLI, future WebAssembly tooling, and other developer tools.
+The project is intentionally focused on **inspection**, not compression or decompression. It exposes encoded structure and source-byte metadata through a reusable Rust API and a CLI, while leaving compressed block payloads opaque.
 
-> Status: the initial v0.1 requirements, architecture, and public API direction are accepted. Parser implementation has not started yet.
+> Status: the v0.1 structural parser, human-readable CLI, and JSON CLI are implemented on `main`. The project remains pre-1.0 and the public API may still evolve intentionally.
 
-## Goals
+## What ZstdScope inspects
+
+The current v0.1 scope includes:
+
+- Standard and all 16 Skippable Frame magic values;
+- concatenated frames with exact frame boundaries;
+- Frame Header descriptor fields and derived window size;
+- Frame Content Size, including all encoded widths;
+- Dictionary ID, preserving an explicitly encoded zero separately from an absent field;
+- Raw, RLE, and Compressed block headers and encoded content spans;
+- the distinction between RLE declared size and its one-byte encoded content;
+- stored content checksum value and span, without claiming checksum verification;
+- zero-based source spans for major encoded fields;
+- typed, location-aware parse errors for malformed and truncated input.
+
+Parsing literals, sequences, Huffman tables, FSE tables, and other compressed-block internals is intentionally deferred beyond v0.1.
+
+The parser is strict: it requires at least one complete frame and consumes the entire input. Empty input, malformed structures, unknown top-level magic, and trailing partial frames are errors.
+
+## Rust library
+
+The primary API is:
+
+```rust
+pub fn inspect(data: &[u8]) -> Result<ZstdFile, ZstdError>;
+```
+
+A simple consumer can read bytes however it chooses and pass the slice to the parser:
+
+```rust
+use zstdscope::{FrameKind, inspect};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = std::fs::read("sample.zst")?;
+    let file = inspect(&bytes)?;
+
+    for frame in &file.frames {
+        match &frame.kind {
+            FrameKind::Standard(standard) => {
+                println!(
+                    "frame #{}: standard, {} blocks, offset={}, size={}",
+                    frame.index,
+                    standard.blocks.len(),
+                    frame.span.offset,
+                    frame.span.length
+                );
+            }
+            FrameKind::Skippable(skippable) => {
+                println!(
+                    "frame #{}: skippable variant {}, payload={} bytes",
+                    frame.index,
+                    skippable.variant,
+                    skippable.declared_payload_size
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+All public offsets are zero-based byte offsets into the encoded input. Opaque block and Skippable payload bytes are represented by spans rather than copied into the returned model.
+
+### Optional serialization
+
+The core crate keeps serialization optional:
+
+```toml
+[features]
+default = []
+serde = ["dep:serde"]
+```
+
+Enabling the `serde` feature adds `Serialize` support to the public inspection model. Parsing-only users do not require Serde.
+
+## CLI
+
+Inspect a file with the human-readable renderer:
+
+```text
+zstdscope inspect sample.zst
+```
+
+From a repository checkout:
+
+```text
+cargo run -p zstdscope-cli -- inspect sample.zst
+```
+
+The output reports frame type and boundaries, header metadata, block types and sizes, Skippable payload metadata, and stored checksum metadata when present.
+
+### JSON output
+
+Use `--json` for machine-readable output:
+
+```text
+zstdscope inspect sample.zst --json
+```
+
+or from the workspace:
+
+```text
+cargo run -p zstdscope-cli -- inspect sample.zst --json
+```
+
+JSON field names and serialized enum values use explicit `snake_case` representations. `FrameKind` uses a tagged `type` / `data` shape, and Inspector-specific distinctions such as absent versus explicitly encoded zero Dictionary IDs and RLE declared versus encoded sizes are preserved.
+
+I/O and parse failures return a non-zero exit status, write diagnostics to stderr, and do not emit partial-success JSON.
+
+## Workspace
+
+```text
+zstdscope/
+├── crates/
+│   ├── zstdscope/       # Pure Rust parsing library
+│   └── zstdscope-cli/   # CLI built on the public library API
+├── docs/
+└── ARCHITECTURE.md
+```
+
+The accepted v0.1 API direction is documented in [Public API design](docs/API-DESIGN.md).
+
+## Design principles
 
 ZstdScope aims to:
 
-- parse Zstandard streams without decompressing their payloads;
-- expose standard frames, skippable frames, frame headers, block headers, byte offsets, and sizes;
-- preserve byte-level distinctions useful to inspection tools;
+- inspect Zstandard structure without decompressing payloads;
+- preserve byte-level distinctions useful to inspection and hex-viewer tooling;
 - provide precise diagnostics for malformed or unsupported input;
-- remain safe on untrusted byte input and avoid parser panics from malformed data;
-- keep the parsing core independent from the CLI and future user interfaces;
+- remain safe on untrusted byte input;
+- keep parsing independent from filesystem, terminal, and CLI concerns;
+- keep mandatory core dependencies small;
 - remain suitable for a future `wasm32` target.
 
 ## Non-goals
@@ -25,53 +148,8 @@ ZstdScope is not intended to be:
 - a compressor;
 - a decompressor;
 - a replacement for the official `zstd` CLI or `libzstd`;
-- a complete decoder for compressed block internals in the first release.
-
-## Planned v0.1 scope
-
-The first implementation milestone will inspect:
-
-- Zstandard standard-frame magic numbers;
-- skippable-frame magic numbers;
-- frame header descriptor fields;
-- window size;
-- frame content size;
-- Dictionary ID, preserving an explicitly encoded zero separately from an absent field;
-- content checksum presence and stored checksum value;
-- block headers;
-- Raw, RLE, and Compressed block types;
-- last-block markers;
-- frame, header-field, and block source spans;
-- concatenated frames.
-
-Parsing literals, sequences, Huffman tables, and FSE tables inside compressed blocks is explicitly deferred beyond v0.1.
-
-The strict v0.1 parser requires at least one complete frame. Empty input, truncated structures, unknown top-level magic, and trailing partial frames are parse errors.
-
-## Workspace
-
-```text
-zstdscope/
-├── crates/
-│   ├── zstdscope/       # Pure Rust parsing library
-│   └── zstdscope-cli/   # CLI built on the library
-├── docs/
-└── ARCHITECTURE.md
-```
-
-The initial public API centers on:
-
-```rust
-pub fn inspect(data: &[u8]) -> Result<ZstdFile, ZstdError>;
-```
-
-The accepted v0.1 API direction is documented in [Public API design](docs/API-DESIGN.md). The project remains pre-1.0, so future breaking changes may still occur intentionally and with documentation.
-
-## JSON
-
-The CLI will support machine-readable inspection output with `--json`.
-
-JSON field names and serialized enum values use `snake_case`. The representation is explicitly defined and tested rather than accidentally depending on serialization-library defaults.
+- a decoder for compressed block internals in v0.1;
+- a content-checksum verifier in v0.1.
 
 ## Documentation
 
@@ -94,7 +172,7 @@ Where the current reference specification and the RFC differ, the difference mus
 
 ## Safety
 
-ZstdScope treats every input byte as untrusted. The initial parser design requires bounds-checked reads, checked offset/size arithmetic, no opaque payload copies, and no project-authored `unsafe` Rust.
+ZstdScope treats every input byte as untrusted. Parser reads and skips are bounds-checked, offset/size arithmetic is checked, opaque payloads are not copied into the inspection model, and the project forbids authored `unsafe` Rust in the core crate.
 
 See [SECURITY.md](SECURITY.md) for the project security policy.
 
