@@ -1,8 +1,8 @@
 # ZstdScope Requirements
 
-Status: **Draft**
+Status: **Accepted for v0.1 implementation**
 
-This document defines the intended scope and quality requirements for the first implementation milestone of ZstdScope. It is a design contract, not a description of existing behavior.
+This document defines the intended scope and quality requirements for the first implementation milestone of ZstdScope. It is the v0.1 design contract, not a description of existing behavior.
 
 ## 1. Product definition
 
@@ -46,7 +46,7 @@ ZstdScope v0.1 will not:
 - provide random access to decompressed content;
 - silently recover from arbitrary corruption.
 
-A tolerant/recovery parser may be considered later, but v0.1 is strict by default.
+A tolerant/recovery parser may be considered later. ZstdScope v0.1 exposes only strict inspection behavior.
 
 ## 4. Functional requirements
 
@@ -58,18 +58,18 @@ The library must expose a simple entry point equivalent in purpose to:
 pub fn inspect(data: &[u8]) -> Result<ZstdFile, ZstdError>;
 ```
 
-The exact API may change before implementation is finalized.
+The accepted initial API direction is documented in `docs/API-DESIGN.md` and ADR 0004.
 
-### FR-002 — Parse concatenated frames
+### FR-002 — Parse one or more concatenated frames
 
-The parser must process a stream containing multiple consecutive frames until the input is exhausted.
+The parser must require at least one complete top-level frame and then process consecutive frames until the input is exhausted.
 
 Supported top-level frame kinds:
 
 - standard Zstandard frame;
 - skippable frame.
 
-An unexpected top-level magic number is an error.
+An empty input is invalid Zstandard compressed data and must return a typed EOF/truncation-style parse error. An unexpected top-level magic number is an error. Trailing bytes that cannot form another complete valid frame are also an error and must not be silently ignored.
 
 ### FR-003 — Parse standard-frame magic number
 
@@ -96,11 +96,17 @@ For single-segment frames, the window descriptor is absent and the effective win
 
 All arithmetic must be checked.
 
-### FR-006 — Parse dictionary ID
+### FR-006 — Parse Dictionary ID without losing encoded fidelity
 
-The parser must support dictionary ID field widths specified by the dictionary ID flag and expose the decoded ID.
+The parser must support Dictionary ID field widths specified by the Dictionary ID flag and expose the decoded numeric value when the field is present.
 
-A decoded dictionary ID of zero must be represented consistently with the specification's meaning that no dictionary ID is specified. The API design must avoid implying that a zero ID proves that no dictionary is required for decompression.
+The public model must preserve three distinct inspection states:
+
+- the Dictionary ID field is absent;
+- the field is present and explicitly encodes zero;
+- the field is present and encodes a non-zero value.
+
+An explicitly encoded zero has the same Dictionary-ID meaning as an unspecified ID, but neither state proves that no dictionary is required for decompression. The accepted representation is described in `docs/API-DESIGN.md`.
 
 ### FR-007 — Parse frame content size
 
@@ -115,12 +121,12 @@ Each standard frame must be parsed through its final block.
 For every block the result must expose at least:
 
 - block index;
-- byte offset of the block header;
+- byte offset/span of the block header;
 - block type;
 - last-block flag;
 - the 21-bit declared `Block_Size` value;
 - encoded block-content byte length;
-- total encoded block byte length including the three-byte header.
+- source span of encoded block content.
 
 Supported block types:
 
@@ -138,7 +144,7 @@ The parser should validate block-size constraints that can be checked without de
 
 ### FR-010 — Parse optional content checksum field
 
-If the frame header indicates a content checksum, the parser must consume and expose the stored 32-bit checksum value and its offset.
+If the frame header indicates a content checksum, the parser must consume and expose the stored 32-bit checksum value and its source span.
 
 ZstdScope v0.1 does not verify the checksum because verification requires the decoded content.
 
@@ -148,35 +154,40 @@ The parser must recognize all 16 skippable magic-number values in the range defi
 
 For a skippable frame the model must expose:
 
-- frame start offset;
-- exact magic number;
+- frame start/total span;
+- exact magic number and magic span;
 - variant/tag nibble derivable from the magic number;
+- size-field span;
 - declared payload length;
-- payload offset;
-- total encoded frame length.
+- payload span.
 
 The parser does not need to interpret user-defined payload contents.
 
-### FR-012 — Preserve offsets
+### FR-012 — Preserve source spans
 
-All major structural elements must include byte offsets sufficient for a future hex viewer to map parsed metadata back to source bytes.
+Major structural elements and physically encoded frame-header fields must include byte spans sufficient for a future hex viewer to map parsed metadata back to source bytes.
 
 At minimum:
 
-- frame start;
-- frame header start/end or encoded length;
-- each block header start;
-- block content start;
-- checksum offset when present;
-- skippable payload start.
+- complete frame;
+- magic number;
+- frame header;
+- frame header descriptor;
+- Window Descriptor when present;
+- Dictionary ID when present, including explicitly encoded zero;
+- Frame Content Size when present;
+- each block header;
+- each block content region;
+- checksum when present;
+- skippable size field and payload.
 
-Offsets are zero-based from the beginning of the inspected input.
+Offsets are zero-based from the beginning of the inspected input and refer to encoded bytes.
 
 ### FR-013 — JSON-capable data model
 
-The public model should be designed so that the CLI can serialize inspection results to JSON without duplicating parser logic.
+The public model must support CLI JSON serialization without duplicating parser logic.
 
-Serialization support may be feature-gated if that keeps the core lightweight.
+Serialization support should be optional in the core crate so parsing-only users do not require serialization dependencies.
 
 ## 5. CLI requirements
 
@@ -198,7 +209,9 @@ The CLI must support machine-readable output:
 zstdscope inspect <FILE> --json
 ```
 
-The JSON schema is not stable before v1.0 and must be documented as such.
+JSON field names and serialized enum values use `snake_case`. Serialization attributes/representation must be explicit and covered by tests rather than relying accidentally on Serde defaults.
+
+The exact JSON schema is not stable before v1.0; intentional changes after releases begin must be documented.
 
 ### CLI-003 — Exit behavior
 
@@ -210,7 +223,7 @@ Errors must be typed and must not require consumers to parse human-readable stri
 
 Expected categories include, but are not limited to:
 
-- unexpected end of input;
+- unexpected end of input, including empty or truncated input;
 - invalid top-level magic number;
 - reserved frame-header bit set;
 - reserved block type;
@@ -220,11 +233,15 @@ Expected categories include, but are not limited to:
 
 Where meaningful, errors must contain the failing zero-based byte offset.
 
+`ZstdError` is `#[non_exhaustive]` so additional validation errors can be introduced without permanently freezing the initial error taxonomy.
+
 ## 7. Safety and resource requirements
 
-### SAFE-001 — No panic on arbitrary input
+### SAFE-001 — No panic on arbitrary structurally malformed input
 
-For any byte sequence, the public parser entry point must return `Ok` or `Err`; malformed input must not cause a panic.
+For any byte sequence that can be represented as the provided input slice, the public parser entry point must return `Ok` or `Err`; malformed structure must not cause a parser panic.
+
+This invariant does not claim recoverability from process-level conditions such as global allocator failure.
 
 ### SAFE-002 — Bounds-checked reads
 
@@ -238,9 +255,13 @@ Offset and size arithmetic must use checked operations whenever attacker-control
 
 Inspecting a skippable frame or block must not allocate a buffer proportional to its declared payload size merely to skip or describe it.
 
-### SAFE-005 — `unsafe` policy
+### SAFE-005 — Metadata allocation awareness
 
-The initial implementation should use no `unsafe` Rust. Introducing `unsafe` later requires an explicit architecture decision explaining why it is necessary and how its invariants are tested.
+Metadata allocation may scale with the number of frames and blocks actually present in the input, but the design must avoid hidden payload copies or allocation based solely on unvalidated declared sizes. Future configurable frame/block count limits must remain possible without breaking the core model.
+
+### SAFE-006 — `unsafe` policy
+
+The initial implementation uses no project-authored `unsafe` Rust. Introducing `unsafe` later requires an explicit architecture decision explaining why it is necessary and how its invariants are tested.
 
 ## 8. Compatibility requirements
 
@@ -258,30 +279,33 @@ Any known difference between the RFC and the current reference specification tha
 
 The parser test suite should cover at least:
 
+- empty input;
 - minimal valid standard frame;
 - raw block;
 - RLE block;
 - compressed block treated as opaque content;
 - multiple blocks;
 - content checksum present;
-- each dictionary ID width;
+- each Dictionary ID width, including explicitly encoded zero;
 - each frame content size width;
 - single-segment and non-single-segment frames;
 - concatenated standard frames;
 - skippable frames and each valid skippable magic pattern;
 - standard and skippable frames mixed in one stream;
 - invalid magic;
+- trailing partial magic bytes;
 - truncated frame header;
 - truncated block header;
 - truncated block content;
 - truncated checksum;
 - reserved frame-header bit;
 - reserved block type;
-- malicious size values and overflow boundaries.
+- malicious size values and overflow boundaries;
+- JSON naming/shape tests for public CLI output.
 
 Test fixtures generated by the official `zstd` implementation are desirable, but hand-constructed byte fixtures should also be used for edge cases where exact bit-level control matters.
 
-A fuzz target should be added before the first stable release. The core invariant is that arbitrary bytes never cause a parser panic.
+A fuzz target should be added before the first stable release. The core invariant is that malformed arbitrary bytes never cause a parser panic.
 
 ## 10. Definition of done for v0.1
 
@@ -294,4 +318,4 @@ v0.1 is ready when:
 - public APIs have rustdoc documentation;
 - README and architecture documentation match implemented behavior;
 - no known parser panic exists for malformed input;
-- project licensing has been explicitly selected and added to the repository.
+- `MIT OR Apache-2.0` licensing is correctly represented in repository files and Cargo metadata.
