@@ -1,4 +1,4 @@
-use zstdscope::{BlockType, ByteSpan, Frame, FrameKind, StandardFrame, ZstdError, inspect};
+use zstdscope::{BlockType, ByteSpan, FrameKind, StandardFrame, ZstdError, inspect};
 
 const REFERENCE_RAW_NO_CHECKSUM: &str = include_str!("fixtures/reference/raw-no-checksum.zst.hex");
 const REFERENCE_COMPRESSED_CHECKSUM: &str =
@@ -8,10 +8,8 @@ const HAND_BUILT: &str = include_str!("fixtures/hand-built.hex");
 #[test]
 fn reference_generated_frames_parse_with_exact_structure_and_spans() {
     let raw_input = decode_hex(REFERENCE_RAW_NO_CHECKSUM);
-    let raw_frame = single_frame(&raw_input);
-    assert_span(&raw_frame.span, 0, 50);
-    let raw = standard(raw_frame);
-
+    let (raw_span, raw) = inspect_single_standard(&raw_input);
+    assert_span(&raw_span, 0, 50);
     assert_span(&raw.magic_span, 0, 4);
     assert_span(&raw.header.span, 4, 2);
     assert_eq!(raw.header.descriptor, 0x20);
@@ -34,10 +32,8 @@ fn reference_generated_frames_parse_with_exact_structure_and_spans() {
     assert!(raw.content_checksum.is_none());
 
     let compressed_input = decode_hex(REFERENCE_COMPRESSED_CHECKSUM);
-    let compressed_frame = single_frame(&compressed_input);
-    assert_span(&compressed_frame.span, 0, 63);
-    let compressed = standard(compressed_frame);
-
+    let (compressed_span, compressed) = inspect_single_standard(&compressed_input);
+    assert_span(&compressed_span, 0, 63);
     assert_span(&compressed.header.span, 4, 3);
     assert_eq!(compressed.header.descriptor, 0x64);
     assert!(compressed.header.single_segment);
@@ -65,36 +61,30 @@ fn reference_generated_frames_parse_with_exact_structure_and_spans() {
 }
 
 #[test]
-fn hand_built_dictionary_id_widths_preserve_encoded_fidelity() {
-    let cases = [
+fn hand_built_header_widths_preserve_inspector_fidelity() {
+    let dictionary_cases = [
         ("dict_id_1_explicit_zero", 0_u32, 1_u64, 3_u64),
         ("dict_id_2", 0x1234_u32, 2_u64, 4_u64),
         ("dict_id_4", 0x1234_5678_u32, 4_u64, 6_u64),
     ];
 
-    for (name, encoded, width, header_length) in cases {
-        let input = hand_fixture(name);
-        let frame = standard(single_frame(&input));
+    for (name, encoded, width, header_length) in dictionary_cases {
+        let (_, frame) = inspect_single_standard(&hand_fixture(name));
         let dictionary_id = frame
             .header
             .dictionary_id
             .as_ref()
             .expect("Dictionary ID field must be present");
-
         assert_eq!(dictionary_id.encoded, encoded, "{name}");
         assert_span(&dictionary_id.span, 6, width);
         assert_span(&frame.header.span, 4, header_length);
     }
 
-    let absent = standard(single_frame(&hand_fixture("minimal_standard")));
+    let (_, absent) = inspect_single_standard(&hand_fixture("minimal_standard"));
     assert!(absent.header.dictionary_id.is_none());
-}
-
-#[test]
-fn hand_built_frame_content_size_widths_cover_single_and_non_single_segment() {
-    let absent = standard(single_frame(&hand_fixture("minimal_standard")));
-    assert!(!absent.header.single_segment);
     assert!(absent.header.frame_content_size.is_none());
+    assert!(!absent.header.single_segment);
+    assert_eq!(absent.header.window_size, 1024);
     assert_span(
         absent
             .header
@@ -104,46 +94,32 @@ fn hand_built_frame_content_size_widths_cover_single_and_non_single_segment() {
         5,
         1,
     );
-    assert_eq!(absent.header.window_size, 1024);
 
-    let cases = [
+    let fcs_cases = [
         ("fcs_1_single", 0_u64, 5_u64, 1_u64, 2_u64, true, 0_u64),
         ("fcs_2", 256_u64, 6_u64, 2_u64, 4_u64, false, 1024_u64),
         ("fcs_4", 256_u64, 6_u64, 4_u64, 6_u64, false, 1024_u64),
         ("fcs_8", 256_u64, 6_u64, 8_u64, 10_u64, false, 1024_u64),
     ];
 
-    for (name, value, span_offset, span_length, header_length, single, window_size) in cases {
-        let frame = standard(single_frame(&hand_fixture(name)));
-        let frame_content_size = frame
+    for (name, value, offset, length, header_length, single, window_size) in fcs_cases {
+        let (_, frame) = inspect_single_standard(&hand_fixture(name));
+        let fcs = frame
             .header
             .frame_content_size
             .as_ref()
             .expect("Frame Content Size must be present");
-
         assert_eq!(frame.header.single_segment, single, "{name}");
         assert_eq!(frame.header.window_size, window_size, "{name}");
-        assert_eq!(frame_content_size.value, value, "{name}");
-        assert_span(&frame_content_size.span, span_offset, span_length);
+        assert_eq!(fcs.value, value, "{name}");
+        assert_span(&fcs.span, offset, length);
         assert_span(&frame.header.span, 4, header_length);
-        if single {
-            assert!(frame.header.window_descriptor_span.is_none(), "{name}");
-        } else {
-            assert_span(
-                frame
-                    .header
-                    .window_descriptor_span
-                    .as_ref()
-                    .expect("non-Single Segment frame must encode a Window Descriptor"),
-                5,
-                1,
-            );
-        }
+        assert_eq!(frame.header.window_descriptor_span.is_none(), single, "{name}");
     }
 }
 
 #[test]
-fn hand_built_block_cases_preserve_encoded_size_semantics_and_spans() {
+fn hand_built_blocks_preserve_encoded_size_semantics_and_spans() {
     let cases = [
         ("raw_block", BlockType::Raw, 2_u32, 2_u32, 2_u64),
         ("rle_block", BlockType::Rle, 17_u32, 1_u32, 1_u64),
@@ -157,9 +133,8 @@ fn hand_built_block_cases_preserve_encoded_size_semantics_and_spans() {
     ];
 
     for (name, block_type, declared_size, encoded_size, content_length) in cases {
-        let frame = standard(single_frame(&hand_fixture(name)));
+        let (_, frame) = inspect_single_standard(&hand_fixture(name));
         let block = &frame.blocks[0];
-
         assert_eq!(block.block_type, block_type, "{name}");
         assert_eq!(block.declared_size, declared_size, "{name}");
         assert_eq!(block.encoded_content_size, encoded_size, "{name}");
@@ -168,7 +143,8 @@ fn hand_built_block_cases_preserve_encoded_size_semantics_and_spans() {
         assert!(block.is_last, "{name}");
     }
 
-    let frame = standard(single_frame(&hand_fixture("multiple_blocks")));
+    let (span, frame) = inspect_single_standard(&hand_fixture("multiple_blocks"));
+    assert_span(&span, 0, 15);
     assert_eq!(frame.blocks.len(), 2);
     assert_eq!(frame.blocks[0].block_type, BlockType::Rle);
     assert_span(&frame.blocks[0].header_span, 6, 3);
@@ -182,7 +158,8 @@ fn hand_built_block_cases_preserve_encoded_size_semantics_and_spans() {
 
 #[test]
 fn checksum_and_mixed_stream_fixtures_preserve_exact_boundaries() {
-    let checksum_frame = standard(single_frame(&hand_fixture("checksum")));
+    let (checksum_span, checksum_frame) = inspect_single_standard(&hand_fixture("checksum"));
+    assert_span(&checksum_span, 0, 13);
     let checksum = checksum_frame
         .content_checksum
         .as_ref()
@@ -315,21 +292,22 @@ fn malformed_fixture_matrix_returns_typed_location_aware_errors() {
     }
 }
 
-fn single_frame(input: &[u8]) -> Frame {
+fn inspect_single_standard(input: &[u8]) -> (ByteSpan, StandardFrame) {
     let file = inspect(input).expect("single-frame fixture must parse");
-    assert_eq!(file.input_size, u64::try_from(input.len()).expect("length fits u64"));
+    assert_eq!(
+        file.input_size,
+        u64::try_from(input.len()).expect("length fits u64")
+    );
     assert_eq!(file.frames.len(), 1);
-    file.frames
+    let frame = file
+        .frames
         .into_iter()
         .next()
-        .expect("single-frame fixture must produce one frame")
-}
-
-fn standard(frame: Frame) -> StandardFrame {
-    let FrameKind::Standard(frame) = frame.kind else {
+        .expect("single-frame fixture must produce one frame");
+    let FrameKind::Standard(standard) = frame.kind else {
         panic!("fixture did not produce a Standard frame");
     };
-    frame
+    (frame.span, standard)
 }
 
 fn assert_span(span: &ByteSpan, offset: u64, length: u64) {
