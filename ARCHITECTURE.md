@@ -1,8 +1,8 @@
 # ZstdScope Architecture
 
-Status: **Draft**
+Status: **Accepted for v0.1 implementation**
 
-This document describes the proposed architecture for ZstdScope before implementation begins. The architecture is intentionally small for v0.1 and keeps room for future CLI, WebAssembly, streaming, and visualization use cases.
+This document defines the accepted initial architecture for ZstdScope. The architecture is intentionally small for v0.1 and leaves room for future CLI, WebAssembly, streaming, and visualization use cases.
 
 ## 1. Architectural goals
 
@@ -11,11 +11,11 @@ The architecture prioritizes:
 1. **Correctness against the Zstandard format specification.**
 2. **Safety on untrusted bytes.**
 3. **Clear separation between parsing and presentation.**
-4. **Stable structural metadata suitable for tools.**
+4. **Structural metadata suitable for inspection tooling.**
 5. **Low dependency and platform coupling.**
 6. **Future WebAssembly compatibility.**
 
-Performance matters, but v0.1 should not trade parser clarity or safety for micro-optimizations.
+Performance matters, but v0.1 must not trade parser clarity or safety for micro-optimizations.
 
 ## 2. System boundary
 
@@ -53,7 +53,7 @@ No filesystem, terminal, JSON formatting, or command-line behavior belongs in th
 
 ## 3. Workspace layout
 
-Proposed Cargo workspace:
+Initial Cargo workspace:
 
 ```text
 zstdscope/
@@ -78,7 +78,7 @@ zstdscope/
 └── tests/
 ```
 
-The exact module names are not API commitments. They describe intended responsibilities.
+The exact internal module names are not public API commitments. They describe intended responsibilities.
 
 ## 4. Crate responsibilities
 
@@ -95,7 +95,7 @@ The library owns:
 - structural validation possible without decompression;
 - offsets and encoded-size accounting;
 - typed parse errors;
-- public inspection model.
+- the public inspection model.
 
 The library does **not** own:
 
@@ -120,7 +120,7 @@ The CLI must call the same public library API available to third-party users. It
 
 ## 5. Parsing pipeline
 
-The top-level parsing flow is proposed as:
+Top-level parsing flow:
 
 ```text
 inspect(&[u8])
@@ -146,6 +146,8 @@ input remaining?
     ├── yes: parse next frame
     └── no: return ZstdFile
 ```
+
+The parser requires at least one complete frame. Empty input therefore fails while attempting to read the first top-level magic. Trailing bytes that cannot form another complete frame are also errors.
 
 ### Standard frame flow
 
@@ -176,9 +178,9 @@ Compressed block contents are skipped by encoded length in v0.1. They are not in
 
 ## 6. Safe cursor abstraction
 
-Untrusted bytes should be accessed through one small abstraction rather than by scattered indexing.
+Untrusted bytes are accessed through one small abstraction rather than scattered indexing.
 
-Conceptual API:
+Conceptual internal API:
 
 ```rust
 struct Cursor<'a> {
@@ -206,15 +208,13 @@ Requirements for the cursor:
 - skipping does not allocate;
 - parser code does not directly index attacker-controlled offsets into the input.
 
-The exact API may be adjusted during implementation, but the single-responsibility boundary should remain.
+The exact private method names may be adjusted during implementation, but this responsibility boundary remains.
 
-## 7. Model design
+## 7. Public model design
 
-The public model is inspection-oriented rather than decoder-oriented.
+The public model is inspection-oriented rather than decoder-oriented. The detailed accepted API direction lives in `docs/API-DESIGN.md`.
 
 ### Spans
-
-A reusable byte-span type is proposed:
 
 ```rust
 pub struct ByteSpan {
@@ -223,24 +223,20 @@ pub struct ByteSpan {
 }
 ```
 
-Offsets are zero-based from the beginning of the inspected input.
+Offsets are zero-based from the beginning of the inspected input and refer to encoded bytes.
 
-The parser can use `usize` internally for slice indexing while converting to public offset types with checked conversions. Centralizing conversion avoids accidental unchecked casts.
+The parser uses `usize` internally for slice indexing while converting to public `u64` offsets and lengths with checked conversions.
 
-### File model
+Source spans are exposed for major structures and physically encoded optional frame-header fields so a future hex viewer can map model values back to input bytes.
+
+### File and frame model
 
 ```rust
 pub struct ZstdFile {
     pub input_size: u64,
     pub frames: Vec<Frame>,
 }
-```
 
-### Frame model
-
-A frame should carry common location information and a typed variant:
-
-```rust
 pub struct Frame {
     pub index: usize,
     pub span: ByteSpan,
@@ -253,19 +249,15 @@ pub enum FrameKind {
 }
 ```
 
-### Standard frame
+### Dictionary ID fidelity
 
-Conceptually:
+The model preserves the distinction between:
 
-```rust
-pub struct StandardFrame {
-    pub header: FrameHeader,
-    pub blocks: Vec<Block>,
-    pub content_checksum: Option<ContentChecksum>,
-}
-```
+- no encoded Dictionary ID field;
+- an explicitly encoded zero;
+- a non-zero encoded ID.
 
-The header should retain both decoded/derived values useful to callers and raw information useful to inspection. For example, retaining the raw frame-header descriptor byte makes debugging easier.
+This is an Inspector requirement even though encoded zero has the same Dictionary-ID meaning as an unspecified ID for decompression.
 
 ### Block model
 
@@ -285,83 +277,46 @@ pub struct Block {
 
 For Raw and Compressed blocks, `declared_size` and `encoded_content_size` are equal. For RLE blocks, the encoded content length is one byte while the declared size represents the repetition count in decompressed output.
 
-This distinction is important for accurate offsets and future visualization.
-
-### Skippable frame
-
-Conceptually:
-
-```rust
-pub struct SkippableFrame {
-    pub magic: u32,
-    pub variant: u8,
-    pub payload_span: ByteSpan,
-    pub declared_payload_size: u32,
-}
-```
-
-Payload bytes are not copied into the result in v0.1. Consumers can map the span back to the original input if they need them.
-
 ## 8. Ownership and allocation strategy
 
 The initial `inspect(&[u8])` API is eager with respect to metadata but not payload data.
 
-The parser should allocate only metadata structures such as the frame and block vectors. It should not copy block contents or skippable payloads into the returned model.
+The parser allocates metadata structures such as frame and block vectors. It must not copy block contents or skippable payloads into the returned model.
 
 Benefits:
 
 - lower memory amplification;
-- no attacker-controlled payload-sized allocation;
-- simpler JSON serialization;
-- result types do not need lifetimes tied to the source byte slice;
+- no allocation proportional to an untrusted declared payload merely to skip it;
+- simpler optional JSON serialization;
+- result types do not need lifetimes tied to the source slice;
 - future WebAssembly integration is easier.
 
-A future streaming API may produce events or incremental frame models, but it is intentionally outside v0.1.
+A malicious input can still contain a very large number of real frame/block headers, so metadata counts are a resource consideration. The v0.1 design must leave room for future configurable limits without changing the fundamental result model.
 
 ## 9. Error architecture
 
-Errors should be machine-readable and location-aware.
+Errors are machine-readable and location-aware.
 
-A proposed shape is:
+The accepted direction uses a typed `ZstdError` marked `#[non_exhaustive]`. Representative categories include:
 
-```rust
-pub enum ZstdError {
-    UnexpectedEof {
-        offset: u64,
-        needed: usize,
-        remaining: usize,
-    },
-    InvalidMagic {
-        offset: u64,
-        magic: u32,
-    },
-    ReservedFrameHeaderBit {
-        offset: u64,
-    },
-    ReservedBlockType {
-        offset: u64,
-    },
-    InvalidBlockSize {
-        offset: u64,
-        size: u32,
-        maximum: u32,
-    },
-    ArithmeticOverflow {
-        offset: u64,
-    },
-}
-```
+- unexpected end of input;
+- invalid top-level magic;
+- reserved frame-header bit;
+- reserved block type;
+- invalid block size;
+- arithmetic overflow.
 
-This list is illustrative, not final.
+Human-readable `Display` messages are important, but callers must be able to match error categories without parsing strings.
 
-Human-readable `Display` messages are important, but callers must be able to match variants without parsing strings.
+Empty input and trailing partial top-level magic may use the same typed EOF/truncation error category as other incomplete structures.
 
 ## 10. Validation policy
 
-ZstdScope v0.1 should be strict about structural rules it understands.
+ZstdScope v0.1 is strict about structural rules it understands.
 
 Examples:
 
+- reject empty input because a Zstandard compressed stream contains at least one frame;
 - reject an unknown top-level magic number;
 - reject the reserved frame-header bit when set;
 - reject reserved block type `3`;
@@ -369,51 +324,51 @@ Examples:
 - validate lengths before skipping content;
 - validate size constraints available from frame metadata.
 
-It should **not** claim validation it cannot perform without decompression. In particular, storing the content checksum does not mean validating it against the original content.
+It must **not** claim validation it cannot perform without decompression. In particular, exposing the stored content checksum does not mean validating it against the original content.
 
-Future recovery or forensic modes should be explicit alternatives rather than weakening the default parser contract.
+Future recovery or forensic modes must be explicit alternatives rather than weakening the v0.1 parser contract.
 
 ## 11. Serialization boundary
 
-The core data model should be JSON-friendly, but JSON is not a parser concern.
+The core model is JSON-friendly, but JSON formatting is not a parser concern.
 
-A likely approach is an optional core feature:
+The core may expose optional `serde` serialization support:
 
 ```text
 zstdscope features:
-  serde   # derives Serialize/Deserialize where appropriate
+  serde   # Serialize public inspection model types where appropriate
 ```
 
-The CLI can enable that feature and use a JSON library. This keeps users who only need parsing from paying for serialization dependencies.
+`Deserialize` is not required for v0.1.
 
-The exact dependency choice should be made during implementation planning.
+The CLI enables serialization support for `--json`. JSON field names and serialized enum values use `snake_case`. Enum representation must be chosen explicitly and covered by tests rather than relying accidentally on Serde defaults.
 
 ## 12. CLI architecture
 
-Proposed command:
+Initial command:
 
 ```text
 zstdscope inspect <FILE> [--json]
 ```
 
-v0.1 may read the file into memory and pass a slice to the library. This is simple and consistent with the initial API, but it is a known limitation for very large files.
+v0.1 may read the file into memory and pass a slice to the library. This is simple and consistent with the accepted initial API, but it is a known limitation for very large files.
 
-A streaming/file-backed inspection API is a candidate for a later milestone and should not be simulated inside the CLI with duplicate parsing code.
+A streaming/file-backed inspection API is a later milestone and must not be simulated inside the CLI with duplicate parsing code.
 
 ## 13. Dependency policy
 
-The library should remain small and pure Rust.
+The library remains small and Pure Rust.
 
 For v0.1:
 
 - no `libzstd` or `zstd-sys`;
 - no C/C++ FFI;
 - no platform-specific system dependency;
-- no `unsafe` code without a separately approved architecture decision;
-- keep required dependencies minimal;
-- serialization should preferably be optional.
+- no project-authored `unsafe` code without a separately accepted architecture decision;
+- keep mandatory dependencies minimal;
+- serialization is optional.
 
-"Pure Rust" in this project means the Zstandard structure parser itself is implemented in Rust rather than delegating parsing to the C reference implementation. It does not mean every transitive crate must contain no `unsafe` internally; dependency review remains a separate supply-chain concern.
+"Pure Rust" means the Zstandard structure parser itself is implemented in Rust rather than delegating parsing to the C reference implementation. It does not mean every transitive crate must contain no `unsafe` internally; dependency review remains a separate supply-chain concern.
 
 ## 14. Specification governance
 
@@ -426,7 +381,7 @@ Implementation rules:
 3. When RFC 8878 and the current reference format document materially differ, record the difference before choosing behavior.
 4. Parser tests should link edge cases to the relevant specification rule where practical.
 
-At the time of this architecture draft, the Zstandard repository's format document identifies itself as version 0.4.5 dated 2026-05-14. The repository documentation should record the specification version used when parser behavior changes.
+At the time this architecture was accepted, the Zstandard repository format document identifies itself as version 0.4.5 dated 2026-05-14.
 
 ## 15. Security model
 
@@ -447,46 +402,50 @@ Primary controls:
 - centralized bounds-checked cursor;
 - checked integer arithmetic;
 - no copies of opaque payload data;
-- no `unsafe` in the initial parser;
+- no project-authored `unsafe` in the initial parser;
 - typed errors;
 - targeted boundary tests;
 - fuzz testing.
 
-A future parser limit/configuration API may be needed to cap frame/block counts for hostile environments. v0.1 design should avoid making such limits impossible to add compatibly.
+The "arbitrary input does not panic" invariant refers to malformed parser input; it does not claim recoverability from process-level failures such as global allocator exhaustion.
 
 ## 16. Testing architecture
 
-Tests should exist at multiple levels:
+Tests exist at multiple levels.
 
 ### Unit tests
 
-For bit-field calculations, cursor reads, field-width rules, size derivation, and error locations.
+For bit-field calculations, cursor reads, field-width rules, size derivation, checked conversions, and error locations.
 
 ### Parser integration tests
 
-For complete standard frames, skippable frames, concatenation, and malformed streams.
+For complete standard frames, skippable frames, concatenation, empty/truncated input, and malformed streams.
 
 ### Reference-generated fixtures
 
-Use the official `zstd` implementation to generate representative valid samples. Generated fixture provenance should be documented.
+Use the official `zstd` implementation to generate representative valid samples. Fixture provenance should be documented.
 
 ### Hand-built fixtures
 
-Use exact byte arrays for reserved bits, truncation boundaries, width variants, and other cases that are difficult to force through a normal compressor.
+Use exact byte arrays for reserved bits, truncation boundaries, width variants, explicit zero Dictionary IDs, and other cases requiring bit-level control.
+
+### JSON tests
+
+The CLI must test its JSON field names, enum values, and selected enum representation so output does not change merely because a serialization library default changes.
 
 ### Fuzzing
 
-A fuzz target should repeatedly call the public parser on arbitrary bytes. The minimum invariant is:
+A fuzz target repeatedly calls the public parser on arbitrary bytes. The baseline parser invariant is:
 
 ```text
-arbitrary bytes -> Ok(...) or Err(...), never panic
+malformed arbitrary bytes -> Ok(...) or Err(...), never a parser panic
 ```
 
 Differential checks against the reference implementation may be explored later, while remembering that ZstdScope is an inspector rather than a decompressor.
 
 ## 17. Future extension points
 
-The architecture intentionally leaves room for:
+The architecture leaves room for:
 
 - streaming/event-based inspection;
 - WebAssembly bindings;
@@ -498,4 +457,15 @@ The architecture intentionally leaves room for:
 - tolerant corruption scanning;
 - editor integrations.
 
-These should build on the library model instead of bypassing it.
+These extensions should build on the library model instead of bypassing it.
+
+## 18. Accepted ADRs
+
+The v0.1 architecture is governed by:
+
+- ADR 0001 — Pure Rust structural parser;
+- ADR 0002 — separate parser core and CLI crates;
+- ADR 0003 — start with an in-memory `&[u8]` inspection API;
+- ADR 0004 — v0.1 public API and licensing policy.
+
+A future implementation that intentionally diverges from these decisions should introduce a new ADR rather than silently changing the architecture.
