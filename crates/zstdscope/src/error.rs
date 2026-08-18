@@ -15,6 +15,14 @@ pub enum ZstdError {
     ReservedFrameHeaderBit {
         offset: u64,
     },
+    ReservedBlockType {
+        offset: u64,
+    },
+    InvalidBlockSize {
+        offset: u64,
+        size: u32,
+        maximum: u32,
+    },
     StandardFrameNotImplemented {
         offset: u64,
     },
@@ -43,6 +51,17 @@ impl fmt::Display for ZstdError {
             Self::ReservedFrameHeaderBit { offset } => {
                 write!(f, "reserved frame header bit set at byte offset {offset}")
             }
+            Self::ReservedBlockType { offset } => {
+                write!(f, "reserved block type at byte offset {offset}")
+            }
+            Self::InvalidBlockSize {
+                offset,
+                size,
+                maximum,
+            } => write!(
+                f,
+                "invalid block size {size} at byte offset {offset}: maximum is {maximum}"
+            ),
             Self::StandardFrameNotImplemented { offset } => write!(
                 f,
                 "standard frame parsing is not implemented yet at byte offset {offset}"

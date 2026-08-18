@@ -1,4 +1,3 @@
-#[cfg(test)]
 mod block;
 mod frame;
 mod header;

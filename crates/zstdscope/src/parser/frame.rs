@@ -1,4 +1,4 @@
-use super::header::parse_frame_header;
+use super::{block::parse_blocks, header::parse_frame_header};
 use crate::{ByteSpan, Frame, FrameKind, SkippableFrame, ZstdError, ZstdFile, cursor::Cursor};
 
 const STANDARD_MAGIC: u32 = 0xFD2F_B528;
@@ -36,7 +36,8 @@ fn parse_frame(cursor: &mut Cursor<'_>, index: usize) -> Result<Frame, ZstdError
 }
 
 fn parse_standard_frame(cursor: &mut Cursor<'_>, frame_start: usize) -> Result<Frame, ZstdError> {
-    let _header = parse_frame_header(cursor)?;
+    let header = parse_frame_header(cursor)?;
+    let _blocks = parse_blocks(cursor, header.window_size)?;
 
     Err(ZstdError::StandardFrameNotImplemented {
         offset: public_offset(frame_start)?,
