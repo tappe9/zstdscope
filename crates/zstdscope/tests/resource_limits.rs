@@ -16,7 +16,8 @@ fn frame_limit_accepts_exact_limit_and_rejects_next_frame_at_its_offset() {
     let input = [minimal_standard_frame(), minimal_standard_frame()].concat();
     let exact_limits = limits(2, usize::MAX, usize::MAX);
 
-    let file = inspect_with_limits(&input, exact_limits).expect("two frames must fit a limit of two");
+    let file =
+        inspect_with_limits(&input, exact_limits).expect("two frames must fit a limit of two");
     assert_eq!(file.frames.len(), 2);
 
     let error = inspect_with_limits(&input, limits(1, usize::MAX, usize::MAX)).unwrap_err();
