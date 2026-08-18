@@ -1,6 +1,6 @@
 # ADR 0001: Implement the format parser in Pure Rust
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-18
 
 ## Context
@@ -56,4 +56,4 @@ Potentially useful as a reference, but decoder implementations commonly consume 
 
 ## Follow-up
 
-Before implementation begins, confirm this ADR in review and add specification-linked tests for every bit-field rule implemented in v0.1.
+Implementation must add specification-linked tests for every bit-field rule implemented in v0.1.
