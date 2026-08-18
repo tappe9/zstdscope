@@ -1,5 +1,8 @@
 use super::{block::parse_blocks, header::parse_frame_header};
-use crate::{ByteSpan, Frame, FrameKind, SkippableFrame, ZstdError, ZstdFile, cursor::Cursor};
+use crate::{
+    ByteSpan, ContentChecksum, Frame, FrameKind, SkippableFrame, StandardFrame, ZstdError,
+    ZstdFile, cursor::Cursor,
+};
 
 const STANDARD_MAGIC: u32 = 0xFD2F_B528;
 const SKIPPABLE_MAGIC_MIN: u32 = 0x184D_2A50;
@@ -24,7 +27,7 @@ fn parse_frame(cursor: &mut Cursor<'_>, index: usize) -> Result<Frame, ZstdError
     let magic = cursor.read_u32_le()?;
 
     match magic {
-        STANDARD_MAGIC => parse_standard_frame(cursor, frame_start),
+        STANDARD_MAGIC => parse_standard_frame(cursor, index, frame_start),
         SKIPPABLE_MAGIC_MIN..=SKIPPABLE_MAGIC_MAX => {
             parse_skippable_frame(cursor, index, frame_start, magic)
         }
@@ -35,13 +38,42 @@ fn parse_frame(cursor: &mut Cursor<'_>, index: usize) -> Result<Frame, ZstdError
     }
 }
 
-fn parse_standard_frame(cursor: &mut Cursor<'_>, frame_start: usize) -> Result<Frame, ZstdError> {
+fn parse_standard_frame(
+    cursor: &mut Cursor<'_>,
+    index: usize,
+    frame_start: usize,
+) -> Result<Frame, ZstdError> {
     let header = parse_frame_header(cursor)?;
-    let _blocks = parse_blocks(cursor, header.window_size)?;
+    let blocks = parse_blocks(cursor, header.window_size)?;
+    let content_checksum = parse_content_checksum(cursor, header.content_checksum_flag)?;
 
-    Err(ZstdError::StandardFrameNotImplemented {
-        offset: public_offset(frame_start)?,
+    Ok(Frame {
+        index,
+        span: span_between(frame_start, cursor.position())?,
+        kind: FrameKind::Standard(StandardFrame {
+            magic_span: fixed_span(frame_start, 4)?,
+            header,
+            blocks,
+            content_checksum,
+        }),
     })
+}
+
+fn parse_content_checksum(
+    cursor: &mut Cursor<'_>,
+    present: bool,
+) -> Result<Option<ContentChecksum>, ZstdError> {
+    if !present {
+        return Ok(None);
+    }
+
+    let checksum_start = cursor.position();
+    let value = cursor.read_u32_le()?;
+
+    Ok(Some(ContentChecksum {
+        span: fixed_span(checksum_start, 4)?,
+        value,
+    }))
 }
 
 fn parse_skippable_frame(

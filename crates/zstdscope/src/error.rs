@@ -23,9 +23,6 @@ pub enum ZstdError {
         size: u32,
         maximum: u32,
     },
-    StandardFrameNotImplemented {
-        offset: u64,
-    },
     ArithmeticOverflow {
         offset: u64,
     },
@@ -61,10 +58,6 @@ impl fmt::Display for ZstdError {
             } => write!(
                 f,
                 "invalid block size {size} at byte offset {offset}: maximum is {maximum}"
-            ),
-            Self::StandardFrameNotImplemented { offset } => write!(
-                f,
-                "standard frame parsing is not implemented yet at byte offset {offset}"
             ),
             Self::ArithmeticOverflow { offset } => {
                 write!(f, "offset arithmetic overflow at byte offset {offset}")

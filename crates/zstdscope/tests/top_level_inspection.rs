@@ -43,7 +43,7 @@ fn invalid_top_level_magic_is_typed_and_location_aware() {
 }
 
 #[test]
-fn standard_magic_dispatches_into_the_frame_header_and_block_parsers() {
+fn standard_magic_dispatches_into_the_complete_standard_frame_parser() {
     let mut input = STANDARD_MAGIC.to_le_bytes().to_vec();
     assert_eq!(
         inspect(&input).unwrap_err(),
@@ -75,10 +75,9 @@ fn standard_magic_dispatches_into_the_frame_header_and_block_parsers() {
     );
 
     input.extend_from_slice(&[0x01, 0x00, 0x00]);
-    assert_eq!(
-        inspect(&input).unwrap_err(),
-        ZstdError::StandardFrameNotImplemented { offset: 0 }
-    );
+    let file = inspect(&input).unwrap();
+    assert_eq!(file.frames.len(), 1);
+    assert!(matches!(file.frames[0].kind, FrameKind::Standard(_)));
 }
 
 #[test]
