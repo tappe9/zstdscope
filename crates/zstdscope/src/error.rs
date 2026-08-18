@@ -32,7 +32,10 @@ impl fmt::Display for ZstdError {
                 "unexpected end of input at byte offset {offset}: needed {needed} bytes, {remaining} remaining"
             ),
             Self::InvalidMagic { offset, magic } => {
-                write!(f, "invalid top-level magic 0x{magic:08X} at byte offset {offset}")
+                write!(
+                    f,
+                    "invalid top-level magic 0x{magic:08X} at byte offset {offset}"
+                )
             }
             Self::StandardFrameNotImplemented { offset } => write!(
                 f,
