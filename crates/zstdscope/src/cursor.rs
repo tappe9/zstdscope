@@ -52,16 +52,20 @@ impl<'a> Cursor<'a> {
 
     fn take(&mut self, len: usize) -> Result<&'a [u8], ZstdError> {
         let start = self.position;
-        let end = start.checked_add(len).ok_or_else(|| ZstdError::ArithmeticOverflow {
-            offset: self.offset_for_error(),
-        })?;
+        let end = start
+            .checked_add(len)
+            .ok_or_else(|| ZstdError::ArithmeticOverflow {
+                offset: self.offset_for_error(),
+            })?;
         let remaining = self.remaining();
         let input = self.input;
-        let bytes = input.get(start..end).ok_or_else(|| ZstdError::UnexpectedEof {
-            offset: self.offset_for_error(),
-            needed: len,
-            remaining,
-        })?;
+        let bytes = input
+            .get(start..end)
+            .ok_or_else(|| ZstdError::UnexpectedEof {
+                offset: self.offset_for_error(),
+                needed: len,
+                remaining,
+            })?;
 
         self.position = end;
         Ok(bytes)
