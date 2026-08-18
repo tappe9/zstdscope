@@ -41,10 +41,30 @@ pub enum ZstdError {
     InvalidBlockSize {
         /// Offset of the block header declaring the invalid size.
         offset: u64,
-        /// Declared 21-bit `Block_Size` value.
+        /// Size value that violates the frame block-size constraint.
         size: u32,
         /// Maximum permitted size for the current frame in bytes.
         maximum: u32,
+    },
+    /// A Compressed Block is too small to contain its mandatory section headers.
+    InvalidCompressedBlockSize {
+        /// Offset of the three-byte block header.
+        offset: u64,
+        /// Declared compressed Block Content size.
+        size: u32,
+        /// Minimum structurally possible Compressed Block Content size.
+        minimum: u32,
+    },
+    /// The declared Frame Content Size cannot match the parsed block structure.
+    FrameContentSizeMismatch {
+        /// Offset of the encoded Frame Content Size field.
+        offset: u64,
+        /// Declared decompressed frame size.
+        declared: u64,
+        /// Minimum decoded size possible from the parsed block metadata.
+        minimum: u128,
+        /// Maximum decoded size possible from the parsed block metadata.
+        maximum: u128,
     },
     /// Checked offset, length, or conversion arithmetic overflowed.
     ArithmeticOverflow {
@@ -83,6 +103,23 @@ impl fmt::Display for ZstdError {
             } => write!(
                 f,
                 "invalid block size {size} at byte offset {offset}: maximum is {maximum}"
+            ),
+            Self::InvalidCompressedBlockSize {
+                offset,
+                size,
+                minimum,
+            } => write!(
+                f,
+                "invalid compressed block size {size} at byte offset {offset}: minimum is {minimum}"
+            ),
+            Self::FrameContentSizeMismatch {
+                offset,
+                declared,
+                minimum,
+                maximum,
+            } => write!(
+                f,
+                "frame content size {declared} at byte offset {offset} is outside decoded-size bounds {minimum}..={maximum}"
             ),
             Self::ArithmeticOverflow { offset } => {
                 write!(f, "offset arithmetic overflow at byte offset {offset}")
