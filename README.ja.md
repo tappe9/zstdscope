@@ -13,7 +13,8 @@ ZstdScopeでは次を目指します。
 - Zstandardデータを展開せずに構造を解析する
 - Standard FrameとSkippable Frameを識別する
 - Frame HeaderやBlock Headerの各フィールドを取得する
-- 各構造のbyte offsetとencoded sizeを取得する
+- 各構造・各フィールドのbyte offsetとencoded sizeを取得する
+- Dictionary IDフィールドが「存在しない場合」と「0が明示的に格納されている場合」を区別する
 - 壊れた入力に対してpanicせず、位置情報付きの型付きエラーを返す
 - CLIとParser coreを分離し、他のRustプログラムから再利用できるようにする
 - 将来のWebAssembly / Web Inspectorに対応しやすい設計にする
@@ -30,7 +31,7 @@ ZstdScopeでは次を目指します。
 - Block Header
 - Raw / RLE / Compressed Block
 - Last Block Flag
-- Frame / Blockのbyte offsetとencoded size
+- Frame / Header field / Blockのbyte offsetとencoded size
 - 複数Frameの連結ストリーム
 
 v0.1ではCompressed Block内部の以下は解析しません。
@@ -53,13 +54,15 @@ zstdscope/
 └── ARCHITECTURE.md
 ```
 
-Public APIは、まず次のようなシンプルな形から開始する案です。
+Public APIは、まず次のようなシンプルな形から開始する方針です。
 
 ```rust
 pub fn inspect(data: &[u8]) -> Result<ZstdFile, ZstdError>;
 ```
 
-APIは設計中であり、まだ確定していません。
+Parser coreの必須依存はできるだけ小さくし、JSONシリアライズなどはoptional feature、CLI固有の依存はCLI crate側に寄せます。
+
+APIは実装前の設計段階であり、最初のリリースまでは変更される可能性があります。
 
 ## ドキュメント
 
@@ -90,7 +93,13 @@ Parserでは特に以下を重視します。
 - 不正なsizeによる過剰allocationを防ぐ
 - v0.1ではproject codeに`unsafe`を使用しない
 - Zstdの公開仕様を根拠に実装する
+- core crateの必須依存を最小限に保つ
 
 ## ライセンス
 
-プロジェクトのライセンスはまだ決定していません。最初の配布可能なリリースまでに明示的に決定します。
+ZstdScopeは、利用者が選択できる形で次のデュアルライセンスとします。
+
+- [Apache License 2.0](LICENSE-APACHE)
+- [MIT License](LICENSE-MIT)
+
+特に明記しない限り、ZstdScopeへ提出されたContributionも同じデュアルライセンス条件で提供されます。
