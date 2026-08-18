@@ -21,11 +21,7 @@ pub(super) fn parse_blocks(
     }
 }
 
-fn parse_block(
-    cursor: &mut Cursor<'_>,
-    index: usize,
-    maximum: u32,
-) -> Result<Block, ZstdError> {
+fn parse_block(cursor: &mut Cursor<'_>, index: usize, maximum: u32) -> Result<Block, ZstdError> {
     let header_start = cursor.position();
     let header_offset = public_offset(header_start)?;
     let header = cursor.read_u24_le()?;

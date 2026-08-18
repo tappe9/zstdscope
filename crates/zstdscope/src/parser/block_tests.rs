@@ -235,9 +235,7 @@ fn block_header(is_last: bool, block_type: u8, declared_size: u32) -> [u8; 3] {
     assert!(block_type <= 3);
     assert!(declared_size <= 0x1F_FFFF);
 
-    let value = (declared_size << 3)
-        | (u32::from(block_type) << 1)
-        | u32::from(u8::from(is_last));
+    let value = (declared_size << 3) | (u32::from(block_type) << 1) | u32::from(u8::from(is_last));
     let bytes = value.to_le_bytes();
     [bytes[0], bytes[1], bytes[2]]
 }
