@@ -1,6 +1,6 @@
 # ADR 0002: Separate the parser library from the CLI
 
-- Status: Proposed
+- Status: Accepted
 - Date: 2026-08-18
 
 ## Context
@@ -58,4 +58,4 @@ Viable for small projects, but separate packages provide a clearer dependency bo
 
 ## Follow-up
 
-The initial implementation plan should create both crates before parser work begins and establish CI that checks the whole workspace.
+The initial implementation must create both crates before parser work begins and establish CI that checks the whole workspace.
