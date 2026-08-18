@@ -21,7 +21,12 @@ struct Cli {
 #[derive(Debug, Subcommand)]
 enum Command {
     /// Inspect the structural metadata of a Zstandard file.
-    Inspect { file: PathBuf },
+    Inspect {
+        file: PathBuf,
+        /// Emit machine-readable JSON instead of the human-readable summary.
+        #[arg(long)]
+        json: bool,
+    },
 }
 
 fn main() -> ExitCode {
@@ -36,17 +41,24 @@ fn main() -> ExitCode {
 
 fn run(cli: Cli) -> Result<(), CliError> {
     match cli.command {
-        Command::Inspect { file } => inspect_file(file),
+        Command::Inspect { file, json } => inspect_file(file, json),
     }
 }
 
-fn inspect_file(path: PathBuf) -> Result<(), CliError> {
+fn inspect_file(path: PathBuf, json: bool) -> Result<(), CliError> {
     let input = fs::read(&path).map_err(|source| CliError::Io {
         path: path.clone(),
         source,
     })?;
     let file = zstdscope::inspect(&input).map_err(CliError::Parse)?;
-    print!("{}", render::render(&file));
+
+    if json {
+        let output = serde_json::to_string_pretty(&file).map_err(CliError::Json)?;
+        println!("{output}");
+    } else {
+        print!("{}", render::render(&file));
+    }
+
     Ok(())
 }
 
@@ -54,6 +66,7 @@ fn inspect_file(path: PathBuf) -> Result<(), CliError> {
 enum CliError {
     Io { path: PathBuf, source: io::Error },
     Parse(ZstdError),
+    Json(serde_json::Error),
 }
 
 impl fmt::Display for CliError {
@@ -67,6 +80,7 @@ impl fmt::Display for CliError {
                 )
             }
             Self::Parse(source) => write!(formatter, "parse error: {source}"),
+            Self::Json(source) => write!(formatter, "JSON serialization error: {source}"),
         }
     }
 }
@@ -76,6 +90,7 @@ impl std::error::Error for CliError {
         match self {
             Self::Io { source, .. } => Some(source),
             Self::Parse(source) => Some(source),
+            Self::Json(source) => Some(source),
         }
     }
 }
