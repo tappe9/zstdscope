@@ -1,6 +1,6 @@
 # Zstandard Format Notes for ZstdScope
 
-Status: **Draft design reference**
+Status: **Accepted v0.1 design reference**
 
 This document is a project-oriented summary of the Zstandard format rules needed by ZstdScope. It is not a replacement for the authoritative specification.
 
@@ -12,20 +12,20 @@ ZstdScope should be implemented from primary sources:
 - Current Zstandard format document: https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md
 - Reference implementation: https://github.com/facebook/zstd
 
-At the time this document was created, the Zstandard repository format document identifies itself as **version 0.4.5 (2026-05-14)**.
+At the time this document was accepted, the Zstandard repository format document identifies itself as **version 0.4.5 (2026-05-14)**.
 
 RFC 8878 establishes the stable interoperable format. The repository format document may evolve with clarifications or compatible format work. If the two sources differ in a way that affects ZstdScope, do not silently choose one: record the difference in an issue or ADR and add a targeted test.
 
 ## 2. Stream model
 
-A Zstandard byte stream can contain multiple concatenated frames. Each top-level frame is independently delimited.
+Zstandard compressed data is made of one or more frames. A byte stream can contain multiple concatenated frames, and each top-level frame is independently delimited.
 
 ZstdScope v0.1 recognizes two top-level frame classes:
 
 1. standard Zstandard frames;
 2. skippable frames.
 
-Inspection continues frame by frame until the input is exhausted. Unknown top-level magic is a parse error in strict mode.
+The v0.1 parser is strict. Inspection continues frame by frame until the input is exhausted. Unknown top-level magic is a parse error. An empty input is also invalid because it contains no frame; the implementation should report a typed truncation/EOF-style parse error rather than return an empty successful model.
 
 ## 3. Standard Zstandard frame
 
@@ -80,7 +80,8 @@ ZstdScope policy:
 - preserve/report the unused bit without inventing semantics;
 - reject the reserved bit when set;
 - derive optional field widths before consuming them;
-- expose the original descriptor byte for inspection/debugging.
+- expose the original descriptor byte and its source span for inspection/debugging;
+- expose source spans for physically encoded optional header fields.
 
 ## 5. Frame Content Size
 
@@ -96,7 +97,7 @@ A missing field means **unknown size**, not zero.
 
 Important special case: the two-byte representation stores a value that requires adding the format-defined offset of 256 when decoded.
 
-All width and value arithmetic must be checked before being converted to public model types.
+ZstdScope preserves both the decoded value and the source byte span. All width and value arithmetic must be checked before being converted to public model types.
 
 ## 6. Single Segment and Window Size
 
@@ -119,6 +120,8 @@ window_size = window_base + window_add
 
 ZstdScope should implement this with checked arithmetic and unit tests for minimum, maximum, and representative values.
 
+When a Window Descriptor is physically present, its source span is exposed by the inspection model.
+
 ## 7. Dictionary ID
 
 The dictionary ID flag selects an encoded field width of:
@@ -129,9 +132,15 @@ The dictionary ID flag selects an encoded field width of:
 
 The field is little-endian.
 
-An encoded dictionary ID value of zero has a subtle meaning: it is equivalent to the absence of an identified dictionary ID, but it does not prove that decompression requires no dictionary. Inspector output should avoid losing or misrepresenting this distinction.
+An encoded dictionary ID value of zero has a subtle meaning: it has the same Dictionary-ID meaning as an unspecified ID, but it does not prove that decompression requires no dictionary.
 
-The exact public representation is an open API-design decision.
+ZstdScope is an inspector, so it preserves the byte-level distinction between:
+
+- no Dictionary ID field being encoded;
+- a Dictionary ID field explicitly encoding zero;
+- a Dictionary ID field encoding a non-zero value.
+
+The accepted public model uses `Option<DictionaryId>`: `None` means the field is absent, while `Some(DictionaryId { encoded: 0, .. })` preserves an explicitly encoded zero. See `docs/API-DESIGN.md` and ADR 0004.
 
 ## 8. Content checksum
 
@@ -194,7 +203,7 @@ encoded Block Content length = 1 byte
 Block_Size = decompressed repetition count
 ```
 
-Therefore ZstdScope must not use one ambiguous field to represent both concepts. Offset calculations must use encoded content length.
+Therefore ZstdScope must not use one ambiguous field to represent both concepts. The public model exposes both `declared_size` and `encoded_content_size`, and offset calculations must use encoded content length.
 
 ### Last Block
 
@@ -272,11 +281,13 @@ Skippable Frame
 Standard Frame
 ```
 
-The returned model should preserve input order and provide a monotonically increasing frame index.
+The returned model preserves input order and provides a monotonically increasing frame index.
+
+Trailing bytes that cannot form another complete valid frame are an error; they are not silently ignored.
 
 ## 14. Offset conventions
 
-All ZstdScope public byte offsets are proposed to be:
+All ZstdScope public byte offsets are:
 
 - zero-based;
 - relative to the beginning of the inspected input;
@@ -291,8 +302,10 @@ For bit-level rules, tests should include a short comment pointing to the corres
 - descriptor flag widths;
 - two-byte Frame Content Size offset behavior;
 - Single Segment behavior;
+- Dictionary ID absence versus explicitly encoded zero;
 - skippable magic range;
 - RLE Block Size semantics;
-- reserved bits and block types.
+- reserved bits and block types;
+- empty and truncated input behavior.
 
 When the reference specification changes, this document and those tests should be reviewed together.
