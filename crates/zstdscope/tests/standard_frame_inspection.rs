@@ -61,6 +61,46 @@ fn multiple_blocks_are_preserved_through_last_block() {
 }
 
 #[test]
+fn frame_content_size_must_fit_decoded_size_bounds() {
+    let too_large = single_segment_raw_frame(1, &[]);
+    assert_eq!(
+        inspect(&too_large).unwrap_err(),
+        ZstdError::FrameContentSizeMismatch {
+            offset: 5,
+            declared: 1,
+            minimum: 0,
+            maximum: 0,
+        }
+    );
+
+    let too_small = non_single_segment_raw_frame(256, 257);
+    assert_eq!(
+        inspect(&too_small).unwrap_err(),
+        ZstdError::FrameContentSizeMismatch {
+            offset: 6,
+            declared: 256,
+            minimum: 257,
+            maximum: 257,
+        }
+    );
+}
+
+#[test]
+fn compressed_blocks_contribute_bounded_unknown_decoded_size() {
+    let input = non_single_segment_compressed_frame(2048, &[0x00, 0x00]);
+
+    assert_eq!(
+        inspect(&input).unwrap_err(),
+        ZstdError::FrameContentSizeMismatch {
+            offset: 6,
+            declared: 2048,
+            minimum: 0,
+            maximum: 1024,
+        }
+    );
+}
+
+#[test]
 fn stored_checksum_is_exposed_without_verification() {
     let stored = 0xDEAD_BEEF;
     let input = standard_frame(true, &[(true, 0, &[])], Some(stored));
@@ -125,6 +165,39 @@ fn concatenated_standard_frames_have_exact_boundaries() {
     assert_eq!(file.frames[1].index, 1);
     assert_eq!(file.frames[1].span.offset, 9);
     assert_eq!(file.frames[1].span.length, 13);
+}
+
+fn single_segment_raw_frame(frame_content_size: u8, payload: &[u8]) -> Vec<u8> {
+    let mut frame = STANDARD_MAGIC.to_le_bytes().to_vec();
+    frame.push(0x20);
+    frame.push(frame_content_size);
+    let value = ((payload.len() as u32) << 3) | 1;
+    frame.extend_from_slice(&value.to_le_bytes()[..3]);
+    frame.extend_from_slice(payload);
+    frame
+}
+
+fn non_single_segment_raw_frame(frame_content_size: u16, raw_size: u32) -> Vec<u8> {
+    assert!((256..=65_791).contains(&u32::from(frame_content_size)));
+    let mut frame = STANDARD_MAGIC.to_le_bytes().to_vec();
+    frame.push(0x40);
+    frame.push(0x00);
+    frame.extend_from_slice(&(frame_content_size - 256).to_le_bytes());
+    let value = (raw_size << 3) | 1;
+    frame.extend_from_slice(&value.to_le_bytes()[..3]);
+    frame.resize(frame.len() + raw_size as usize, 0);
+    frame
+}
+
+fn non_single_segment_compressed_frame(frame_content_size: u16, payload: &[u8]) -> Vec<u8> {
+    let mut frame = STANDARD_MAGIC.to_le_bytes().to_vec();
+    frame.push(0x40);
+    frame.push(0x00);
+    frame.extend_from_slice(&(frame_content_size - 256).to_le_bytes());
+    let value = ((payload.len() as u32) << 3) | (2 << 1) | 1;
+    frame.extend_from_slice(&value.to_le_bytes()[..3]);
+    frame.extend_from_slice(payload);
+    frame
 }
 
 fn standard_frame(
