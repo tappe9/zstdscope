@@ -2,19 +2,17 @@
 
 mod render;
 
-use std::{
-    fmt,
-    fs,
-    io,
-    path::PathBuf,
-    process::ExitCode,
-};
+use std::{fmt, fs, io, path::PathBuf, process::ExitCode};
 
 use clap::{Parser, Subcommand};
 use zstdscope::ZstdError;
 
 #[derive(Debug, Parser)]
-#[command(name = "zstdscope", version, about = "Inspect Zstandard compressed data")]
+#[command(
+    name = "zstdscope",
+    version,
+    about = "Inspect Zstandard compressed data"
+)]
 struct Cli {
     #[command(subcommand)]
     command: Command,
@@ -62,7 +60,11 @@ impl fmt::Display for CliError {
     fn fmt(&self, formatter: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
             Self::Io { path, source } => {
-                write!(formatter, "I/O error: failed to read {}: {source}", path.display())
+                write!(
+                    formatter,
+                    "I/O error: failed to read {}: {source}",
+                    path.display()
+                )
             }
             Self::Parse(source) => write!(formatter, "parse error: {source}"),
         }
