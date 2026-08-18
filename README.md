@@ -12,6 +12,7 @@ ZstdScope aims to:
 
 - parse Zstandard streams without decompressing their payloads;
 - expose standard frames, skippable frames, frame headers, block headers, byte offsets, and sizes;
+- preserve byte-level encoding details that are useful to inspection tools;
 - provide precise diagnostics for malformed or unsupported input;
 - remain safe on untrusted byte input and avoid panics from malformed data;
 - keep the parsing core independent from the CLI and future user interfaces;
@@ -35,12 +36,12 @@ The first implementation milestone is expected to inspect:
 - frame header descriptor fields;
 - window size;
 - frame content size;
-- dictionary ID;
+- dictionary ID, including the distinction between an absent field and an explicitly encoded zero;
 - content checksum presence and stored checksum value;
 - block headers;
 - raw, RLE, and compressed block types;
 - last-block markers;
-- frame and block byte offsets and encoded sizes;
+- byte spans for encoded fields, frames, and blocks;
 - concatenated frames.
 
 Parsing literals, sequences, Huffman tables, and FSE tables inside compressed blocks is explicitly deferred beyond v0.1.
@@ -62,7 +63,9 @@ The initial public API is expected to center on a function similar to:
 pub fn inspect(data: &[u8]) -> Result<ZstdFile, ZstdError>;
 ```
 
-The API is still under design and is not yet stable.
+The core crate should keep mandatory dependencies minimal. Serialization is expected to be optional, while CLI-specific dependencies remain in the CLI crate.
+
+The API is still pre-implementation and may evolve before the first release.
 
 ## Documentation
 
@@ -89,4 +92,9 @@ The project is being designed in public. See [CONTRIBUTING.md](CONTRIBUTING.md) 
 
 ## License
 
-A project license has not been selected yet. A license must be chosen before the first distributable release.
+ZstdScope is licensed under either of the following, at your option:
+
+- [Apache License, Version 2.0](LICENSE-APACHE)
+- [MIT License](LICENSE-MIT)
+
+Unless explicitly stated otherwise, contributions intentionally submitted for inclusion in ZstdScope are provided under the same dual-license terms.
