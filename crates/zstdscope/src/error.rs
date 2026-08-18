@@ -12,6 +12,9 @@ pub enum ZstdError {
         offset: u64,
         magic: u32,
     },
+    ReservedFrameHeaderBit {
+        offset: u64,
+    },
     StandardFrameNotImplemented {
         offset: u64,
     },
@@ -36,6 +39,9 @@ impl fmt::Display for ZstdError {
                     f,
                     "invalid top-level magic 0x{magic:08X} at byte offset {offset}"
                 )
+            }
+            Self::ReservedFrameHeaderBit { offset } => {
+                write!(f, "reserved frame header bit set at byte offset {offset}")
             }
             Self::StandardFrameNotImplemented { offset } => write!(
                 f,

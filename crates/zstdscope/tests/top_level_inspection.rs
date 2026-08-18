@@ -43,10 +43,57 @@ fn invalid_top_level_magic_is_typed_and_location_aware() {
 }
 
 #[test]
-fn standard_magic_dispatches_to_the_standard_frame_parser_stub() {
+fn standard_magic_dispatches_into_the_frame_header_parser() {
+    let mut input = STANDARD_MAGIC.to_le_bytes().to_vec();
     assert_eq!(
-        inspect(&STANDARD_MAGIC.to_le_bytes()).unwrap_err(),
+        inspect(&input).unwrap_err(),
+        ZstdError::UnexpectedEof {
+            offset: 4,
+            needed: 1,
+            remaining: 0,
+        }
+    );
+
+    input.push(0x00);
+    assert_eq!(
+        inspect(&input).unwrap_err(),
+        ZstdError::UnexpectedEof {
+            offset: 5,
+            needed: 1,
+            remaining: 0,
+        }
+    );
+
+    input.push(0x00);
+    assert_eq!(
+        inspect(&input).unwrap_err(),
         ZstdError::StandardFrameNotImplemented { offset: 0 }
+    );
+}
+
+#[test]
+fn reserved_standard_frame_header_bit_is_a_typed_error() {
+    let mut input = STANDARD_MAGIC.to_le_bytes().to_vec();
+    input.push(0x08);
+
+    assert_eq!(
+        inspect(&input).unwrap_err(),
+        ZstdError::ReservedFrameHeaderBit { offset: 4 }
+    );
+}
+
+#[test]
+fn truncated_standard_frame_optional_field_reports_its_offset() {
+    let mut input = STANDARD_MAGIC.to_le_bytes().to_vec();
+    input.extend_from_slice(&[0x02, 0x00, 0xAA]);
+
+    assert_eq!(
+        inspect(&input).unwrap_err(),
+        ZstdError::UnexpectedEof {
+            offset: 6,
+            needed: 2,
+            remaining: 1,
+        }
     );
 }
 
