@@ -1,7 +1,7 @@
 use super::{block::parse_blocks, header::parse_frame_header};
 use crate::{
-    ByteSpan, ContentChecksum, Frame, FrameKind, SkippableFrame, StandardFrame, ZstdError, ZstdFile,
-    cursor::Cursor,
+    ByteSpan, ContentChecksum, Frame, FrameKind, SkippableFrame, StandardFrame, ZstdError,
+    ZstdFile, cursor::Cursor,
 };
 
 const STANDARD_MAGIC: u32 = 0xFD2F_B528;
