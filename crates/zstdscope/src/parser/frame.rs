@@ -5,9 +5,8 @@ const SKIPPABLE_MAGIC_MIN: u32 = 0x184D_2A50;
 const SKIPPABLE_MAGIC_MAX: u32 = 0x184D_2A5F;
 
 pub fn inspect(input: &[u8]) -> Result<ZstdFile, ZstdError> {
-    let input_size = u64::try_from(input.len()).map_err(|_| ZstdError::ArithmeticOverflow {
-        offset: u64::MAX,
-    })?;
+    let input_size = u64::try_from(input.len())
+        .map_err(|_| ZstdError::ArithmeticOverflow { offset: u64::MAX })?;
     let mut cursor = Cursor::new(input);
     let mut frames = Vec::new();
 
