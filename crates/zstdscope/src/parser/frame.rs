@@ -35,10 +35,7 @@ fn parse_frame(cursor: &mut Cursor<'_>, index: usize) -> Result<Frame, ZstdError
     }
 }
 
-fn parse_standard_frame(
-    cursor: &mut Cursor<'_>,
-    frame_start: usize,
-) -> Result<Frame, ZstdError> {
+fn parse_standard_frame(cursor: &mut Cursor<'_>, frame_start: usize) -> Result<Frame, ZstdError> {
     let _header = parse_frame_header(cursor)?;
 
     Err(ZstdError::StandardFrameNotImplemented {
