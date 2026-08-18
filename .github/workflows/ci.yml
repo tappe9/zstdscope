@@ -36,10 +36,16 @@ jobs:
       - name: Documentation
         env:
           RUSTDOCFLAGS: -D warnings
-        run: cargo doc --workspace --no-deps
+        run: cargo doc -p zstdscope --all-features --no-deps
 
       - name: Core default features
         run: cargo test -p zstdscope --no-default-features
+
+      - name: Package contents
+        run: cargo package -p zstdscope --list
+
+      - name: Publish dry run
+        run: cargo publish -p zstdscope --dry-run
 
   platform-tests:
     name: Tests (${{ matrix.os }})
