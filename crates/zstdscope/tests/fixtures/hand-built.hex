@@ -4,17 +4,22 @@ dict_id_1_explicit_zero=28b52ffd010000010000
 dict_id_2=28b52ffd02003412010000
 dict_id_4=28b52ffd030078563412010000
 fcs_1_single=28b52ffd2000010000
-fcs_2=28b52ffd40000000010000
-fcs_4=28b52ffd800000010000010000
-fcs_8=28b52ffdc0000001000000000000010000
+# The 2/4/8-byte FCS fixtures declare 256 decoded bytes and use an RLE block
+# with Block_Size=256 so the complete frame is internally consistent.
+fcs_2=28b52ffd4000000003080000
+fcs_4=28b52ffd80000001000003080000
+fcs_8=28b52ffdc000000100000000000003080000
 
 # Valid structural block/content cases.
 raw_block=28b52ffd0000110000aabb
 rle_block=28b52ffd00008b0000aa
 # The compressed payload bytes below are intentionally opaque structural bytes.
-# The reference-generated compressed fixture covers a compressor-valid Compressed block.
+# They satisfy the minimum Compressed Block envelope size, but are not claimed
+# to be a fully decoder-valid compressed payload. The reference-generated
+# compressed fixture covers a fully valid Compressed block.
 compressed_block_opaque=28b52ffd00001d0000010203
 multiple_blocks=28b52ffd00008a0000aa110000bbcc
+# Stored checksum bytes are intentionally arbitrary; v0.1 exposes but does not verify them.
 checksum=28b52ffd0400010000efbeadde
 mixed_standard_skippable_standard=28b52ffd0000010000502a4d1802000000ccdd28b52ffd0000010000
 
