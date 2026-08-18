@@ -50,10 +50,7 @@ pub fn inspect(input: &[u8]) -> Result<ZstdFile, ZstdError> {
 /// Returns the same structural errors as [`inspect`], plus
 /// [`ZstdError::ResourceLimitExceeded`] when a configured count limit is
 /// exhausted.
-pub fn inspect_with_limits(
-    input: &[u8],
-    limits: InspectionLimits,
-) -> Result<ZstdFile, ZstdError> {
+pub fn inspect_with_limits(input: &[u8], limits: InspectionLimits) -> Result<ZstdFile, ZstdError> {
     let input_size = u64::try_from(input.len())
         .map_err(|_| ZstdError::ArithmeticOverflow { offset: u64::MAX })?;
     let mut cursor = Cursor::new(input);
@@ -70,12 +67,7 @@ pub fn inspect_with_limits(
         }
 
         let index = frames.len();
-        frames.push(parse_frame(
-            &mut cursor,
-            index,
-            limits,
-            &mut total_blocks,
-        )?);
+        frames.push(parse_frame(&mut cursor, index, limits, &mut total_blocks)?);
     }
 
     Ok(ZstdFile { input_size, frames })
