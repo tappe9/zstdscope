@@ -13,6 +13,7 @@ fn reads_little_endian_integer_widths() {
     assert_eq!(cursor.read_u24_le().unwrap(), 0x665544);
     assert_eq!(cursor.read_u32_le().unwrap(), 0xaa998877);
     assert_eq!(cursor.read_u64_le().unwrap(), 0x302010ffeeddccbb);
+    assert_eq!(cursor.remaining(), 0);
 }
 
 #[test]
@@ -30,19 +31,35 @@ fn tracks_position_and_remaining_bytes() {
 }
 
 #[test]
-fn truncated_read_reports_offset_needed_and_remaining() {
+fn truncated_reads_report_required_width_without_moving() {
+    let mut u8_cursor = Cursor::new(&[]);
+    assert_eof(u8_cursor.read_u8().unwrap_err(), 0, 1, 0);
+    assert_eq!(u8_cursor.position(), 0);
+
+    let mut u16_cursor = Cursor::new(&[0xaa]);
+    assert_eof(u16_cursor.read_u16_le().unwrap_err(), 0, 2, 1);
+    assert_eq!(u16_cursor.position(), 0);
+
+    let mut u24_cursor = Cursor::new(&[0xaa, 0xbb]);
+    assert_eof(u24_cursor.read_u24_le().unwrap_err(), 0, 3, 2);
+    assert_eq!(u24_cursor.position(), 0);
+
+    let mut u32_cursor = Cursor::new(&[0xaa, 0xbb, 0xcc]);
+    assert_eof(u32_cursor.read_u32_le().unwrap_err(), 0, 4, 3);
+    assert_eq!(u32_cursor.position(), 0);
+
+    let mut u64_cursor = Cursor::new(&[0; 7]);
+    assert_eof(u64_cursor.read_u64_le().unwrap_err(), 0, 8, 7);
+    assert_eq!(u64_cursor.position(), 0);
+}
+
+#[test]
+fn truncated_read_reports_current_offset() {
     let input = [0xaa, 0xbb];
     let mut cursor = Cursor::new(&input);
     cursor.skip(1).unwrap();
 
-    assert_eq!(
-        cursor.read_u32_le().unwrap_err(),
-        ZstdError::UnexpectedEof {
-            offset: 1,
-            needed: 4,
-            remaining: 1,
-        }
-    );
+    assert_eof(cursor.read_u32_le().unwrap_err(), 1, 4, 1);
     assert_eq!(cursor.position(), 1);
 }
 
@@ -62,14 +79,7 @@ fn skip_beyond_input_returns_unexpected_eof_without_moving() {
     let input = [1, 2, 3];
     let mut cursor = Cursor::new(&input);
 
-    assert_eq!(
-        cursor.skip(4).unwrap_err(),
-        ZstdError::UnexpectedEof {
-            offset: 0,
-            needed: 4,
-            remaining: 3,
-        }
-    );
+    assert_eof(cursor.skip(4).unwrap_err(), 0, 4, 3);
     assert_eq!(cursor.position(), 0);
 }
 
@@ -84,4 +94,15 @@ fn overflowing_position_increment_returns_arithmetic_overflow() {
         ZstdError::ArithmeticOverflow { offset: 1 }
     );
     assert_eq!(cursor.position(), 1);
+}
+
+fn assert_eof(error: ZstdError, offset: u64, needed: usize, remaining: usize) {
+    assert_eq!(
+        error,
+        ZstdError::UnexpectedEof {
+            offset,
+            needed,
+            remaining,
+        }
+    );
 }
