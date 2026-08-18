@@ -1,20 +1,61 @@
-use crate::{Block, BlockType, ByteSpan, ZstdError, cursor::Cursor};
+use crate::{
+    Block, BlockType, ByteSpan, ResourceLimitKind, ZstdError, cursor::Cursor,
+};
 
 const BLOCK_HEADER_SIZE: usize = 3;
 const FORMAT_BLOCK_MAXIMUM_SIZE: u32 = 128 * 1024;
 const MINIMUM_COMPRESSED_BLOCK_SIZE: u32 = 2;
 
+#[cfg(test)]
 pub(super) fn parse_blocks(
     cursor: &mut Cursor<'_>,
     window_size: u64,
+) -> Result<Vec<Block>, ZstdError> {
+    let mut total_blocks = 0;
+    parse_blocks_with_limits(
+        cursor,
+        window_size,
+        usize::MAX,
+        usize::MAX,
+        &mut total_blocks,
+    )
+}
+
+pub(super) fn parse_blocks_with_limits(
+    cursor: &mut Cursor<'_>,
+    window_size: u64,
+    max_blocks_per_frame: usize,
+    max_total_blocks: usize,
+    total_blocks: &mut usize,
 ) -> Result<Vec<Block>, ZstdError> {
     let maximum = block_maximum_size(cursor.position(), window_size)?;
     let mut blocks = Vec::new();
 
     loop {
+        let header_offset = public_offset(cursor.position())?;
+        if blocks.len() >= max_blocks_per_frame {
+            return Err(ZstdError::ResourceLimitExceeded {
+                offset: header_offset,
+                resource: ResourceLimitKind::BlocksPerFrame,
+                limit: max_blocks_per_frame,
+            });
+        }
+        if *total_blocks >= max_total_blocks {
+            return Err(ZstdError::ResourceLimitExceeded {
+                offset: header_offset,
+                resource: ResourceLimitKind::TotalBlocks,
+                limit: max_total_blocks,
+            });
+        }
+
         let block = parse_block(cursor, blocks.len(), maximum)?;
         let is_last = block.is_last;
         blocks.push(block);
+        *total_blocks = total_blocks
+            .checked_add(1)
+            .ok_or(ZstdError::ArithmeticOverflow {
+                offset: header_offset,
+            })?;
 
         if is_last {
             return Ok(blocks);
