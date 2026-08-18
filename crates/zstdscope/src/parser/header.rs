@@ -1,6 +1,4 @@
-use crate::{
-    ByteSpan, DictionaryId, FrameContentSize, FrameHeader, ZstdError, cursor::Cursor,
-};
+use crate::{ByteSpan, DictionaryId, FrameContentSize, FrameHeader, ZstdError, cursor::Cursor};
 
 const RESERVED_BIT: u8 = 0x08;
 const UNUSED_BIT: u8 = 0x10;
