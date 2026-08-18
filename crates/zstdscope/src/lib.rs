@@ -12,8 +12,8 @@ mod parser;
 
 pub use error::ZstdError;
 pub use model::{
-    Block, BlockType, ByteSpan, ContentChecksum, DictionaryId, Frame, FrameContentSize, FrameHeader,
-    FrameKind, SkippableFrame, StandardFrame, ZstdFile,
+    Block, BlockType, ByteSpan, ContentChecksum, DictionaryId, Frame, FrameContentSize,
+    FrameHeader, FrameKind, SkippableFrame, StandardFrame, ZstdFile,
 };
 pub use parser::inspect;
 
