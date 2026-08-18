@@ -4,6 +4,7 @@
 //! accepted architecture and v0.1 implementation issues.
 
 #![forbid(unsafe_code)]
+#![warn(missing_docs)]
 
 mod cursor;
 mod error;
