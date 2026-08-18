@@ -5,7 +5,7 @@ const SKIPPABLE_MAGIC_MIN: u32 = 0x184D_2A50;
 
 #[test]
 fn minimal_standard_frame_produces_complete_model() {
-    let input = standard_frame(false, &[(true, 0, &[])] , None);
+    let input = standard_frame(false, &[(true, 0, &[])], None);
     let file = inspect(&input).unwrap();
 
     assert_eq!(file.input_size, 9);
@@ -69,7 +69,9 @@ fn stored_checksum_is_exposed_without_verification() {
         panic!("expected standard frame");
     };
 
-    let checksum = standard.content_checksum.expect("checksum flag must expose stored metadata");
+    let checksum = standard
+        .content_checksum
+        .expect("checksum flag must expose stored metadata");
     assert_eq!(checksum.value, stored);
     assert_eq!(checksum.span.offset, 9);
     assert_eq!(checksum.span.length, 4);
@@ -125,16 +127,23 @@ fn concatenated_standard_frames_have_exact_boundaries() {
     assert_eq!(file.frames[1].span.length, 13);
 }
 
-fn standard_frame(checksum: bool, blocks: &[(bool, u8, &[u8])], checksum_value: Option<u32>) -> Vec<u8> {
+fn standard_frame(
+    checksum: bool,
+    blocks: &[(bool, u8, &[u8])],
+    checksum_value: Option<u32>,
+) -> Vec<u8> {
     let mut frame = STANDARD_MAGIC.to_le_bytes().to_vec();
     frame.push(if checksum { 0x04 } else { 0x00 });
     frame.push(0x00);
 
     for (index, (is_last, block_type, payload)) in blocks.iter().enumerate() {
-        let declared_size = if *block_type == 1 { 17 } else { payload.len() as u32 };
-        let value = (declared_size << 3)
-            | (u32::from(*block_type) << 1)
-            | u32::from(u8::from(*is_last));
+        let declared_size = if *block_type == 1 {
+            17
+        } else {
+            payload.len() as u32
+        };
+        let value =
+            (declared_size << 3) | (u32::from(*block_type) << 1) | u32::from(u8::from(*is_last));
         let bytes = value.to_le_bytes();
         frame.extend_from_slice(&bytes[..3]);
         frame.extend_from_slice(payload);
