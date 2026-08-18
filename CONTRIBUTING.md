@@ -2,7 +2,7 @@
 
 Thank you for considering a contribution.
 
-ZstdScope is currently in its design and early implementation phase. Correctness and safety matter more than feature count.
+ZstdScope is a pre-1.0 parser/inspection project. Correctness and safety matter more than feature count, and changes to format interpretation should be justified from authoritative Zstandard documentation rather than existing tests alone.
 
 ## Development principles
 
@@ -33,6 +33,8 @@ Primary references:
 - https://www.rfc-editor.org/rfc/rfc8878.html
 - https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md
 
+The official decoder is useful for fixture generation and differential checking, but it is not the sole validator: the reference implementation may intentionally accept inputs that a strict specification validator should reject.
+
 ## Pull requests
 
 Keep pull requests focused. A good parser PR should explain:
@@ -43,20 +45,25 @@ Keep pull requests focused. A good parser PR should explain:
 - tests added;
 - whether the public model or error API changes.
 
-Avoid mixing large formatting/refactoring changes with parser semantic changes unless necessary.
+Avoid mixing large unrelated formatting/refactoring changes with parser semantic changes.
 
 ## Validation
 
-Once the Rust workspace exists, PRs are expected to pass the project checks, anticipated to include:
+Pull requests are expected to pass the repository CI. The current quality gates include:
 
 ```bash
 cargo fmt --check
 cargo clippy --workspace --all-targets --all-features -- -D warnings
 cargo test --workspace --all-features
-cargo doc --workspace --no-deps
+RUSTDOCFLAGS="-D warnings" cargo doc -p zstdscope --all-features --no-deps
+cargo test -p zstdscope --no-default-features
+cargo package -p zstdscope --list
+cargo publish -p zstdscope --dry-run
 ```
 
-Additional fuzz or fixture validation commands will be documented when those targets are added.
+Workspace tests also run on Ubuntu, Windows, and macOS.
+
+Reference-generated fixtures intended to be fully valid should document their official-zstd generation commands and should be checked with `zstd --test` when regenerated. Hand-built fixtures must state whether they prove full validity, only the structural envelope understood by the current parser, or intentional malformed behavior.
 
 ## Public API changes
 
