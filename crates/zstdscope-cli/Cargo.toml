@@ -14,3 +14,6 @@ path = "src/main.rs"
 [dependencies]
 clap = { version = "4.6", features = ["derive"] }
 zstdscope = { path = "../zstdscope" }
+
+[dev-dependencies]
+serde_json = "1.0"
