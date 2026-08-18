@@ -114,7 +114,11 @@ fn hand_built_header_widths_preserve_inspector_fidelity() {
         assert_eq!(fcs.value, value, "{name}");
         assert_span(&fcs.span, offset, length);
         assert_span(&frame.header.span, 4, header_length);
-        assert_eq!(frame.header.window_descriptor_span.is_none(), single, "{name}");
+        assert_eq!(
+            frame.header.window_descriptor_span.is_none(),
+            single,
+            "{name}"
+        );
     }
 }
 
