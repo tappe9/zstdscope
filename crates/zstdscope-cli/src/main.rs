@@ -94,3 +94,47 @@ impl std::error::Error for CliError {
         }
     }
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use std::io::Write;
+
+    struct FailingWriter {
+        kind: io::ErrorKind,
+    }
+
+    impl Write for FailingWriter {
+        fn write(&mut self, _buf: &[u8]) -> io::Result<usize> {
+            Err(io::Error::from(self.kind))
+        }
+
+        fn flush(&mut self) -> io::Result<()> {
+            Ok(())
+        }
+    }
+
+    fn minimal_file() -> zstdscope::ZstdFile {
+        zstdscope::inspect(&[0x28, 0xB5, 0x2F, 0xFD, 0x00, 0x00, 0x01, 0x00, 0x00]).unwrap()
+    }
+
+    #[test]
+    fn text_output_write_failure_is_typed() {
+        let mut writer = FailingWriter {
+            kind: io::ErrorKind::Other,
+        };
+        let error = write_inspection(&mut writer, &minimal_file(), false).unwrap_err();
+
+        assert!(matches!(error, CliError::Output(_)));
+    }
+
+    #[test]
+    fn json_broken_pipe_is_classified_as_normal_pipe_closure() {
+        let mut writer = FailingWriter {
+            kind: io::ErrorKind::BrokenPipe,
+        };
+        let error = write_inspection(&mut writer, &minimal_file(), true).unwrap_err();
+
+        assert!(error.is_broken_pipe());
+    }
+}
