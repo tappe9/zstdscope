@@ -137,10 +137,7 @@ fn truncated_descriptor_and_optional_fields_report_exact_offsets() {
         (vec![0x20], eof(5, 1, 0)),
         (vec![0x40, 0x00, 0xAA], eof(6, 2, 1)),
         (vec![0x80, 0x00, 0xAA, 0xBB, 0xCC], eof(6, 4, 3)),
-        (
-            vec![0xC0, 0x00, 1, 2, 3, 4, 5, 6, 7],
-            eof(6, 8, 7),
-        ),
+        (vec![0xC0, 0x00, 1, 2, 3, 4, 5, 6, 7], eof(6, 8, 7)),
     ];
 
     for (bytes, expected_error) in cases {
