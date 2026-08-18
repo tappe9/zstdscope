@@ -1,10 +1,24 @@
 use crate::ZstdError;
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "Cursor is implemented and tested in issue #3, then wired into production parsing by issue #4"
+    )
+)]
 pub(crate) struct Cursor<'a> {
     input: &'a [u8],
     position: usize,
 }
 
+#[cfg_attr(
+    not(test),
+    allow(
+        dead_code,
+        reason = "Cursor is implemented and tested in issue #3, then wired into production parsing by issue #4"
+    )
+)]
 impl<'a> Cursor<'a> {
     pub(crate) fn new(input: &'a [u8]) -> Self {
         Self { input, position: 0 }
