@@ -40,9 +40,7 @@ pub fn render(file: &ZstdFile) -> String {
                 if let Some(dictionary_id) = &standard.header.dictionary_id {
                     output.push_str(&format!(
                         "    Dictionary ID  encoded={}  offset={}  size={}\n",
-                        dictionary_id.encoded,
-                        dictionary_id.span.offset,
-                        dictionary_id.span.length
+                        dictionary_id.encoded, dictionary_id.span.offset, dictionary_id.span.length
                     ));
                 }
 
