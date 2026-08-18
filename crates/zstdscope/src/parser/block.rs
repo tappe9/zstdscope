@@ -1,6 +1,4 @@
-use crate::{
-    Block, BlockType, ByteSpan, ResourceLimitKind, ZstdError, cursor::Cursor,
-};
+use crate::{Block, BlockType, ByteSpan, ResourceLimitKind, ZstdError, cursor::Cursor};
 
 const BLOCK_HEADER_SIZE: usize = 3;
 const FORMAT_BLOCK_MAXIMUM_SIZE: u32 = 128 * 1024;
