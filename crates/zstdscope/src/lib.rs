@@ -4,3 +4,6 @@
 //! accepted architecture and v0.1 implementation issues.
 
 #![forbid(unsafe_code)]
+
+#[cfg(test)]
+mod cursor_tests;
