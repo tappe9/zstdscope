@@ -1,5 +1,16 @@
 use std::fmt;
 
+/// Resource category that exceeded an [`crate::InspectionLimits`] value.
+#[derive(Debug, Clone, Copy, PartialEq, Eq)]
+pub enum ResourceLimitKind {
+    /// Maximum number of top-level frames.
+    Frames,
+    /// Maximum number of blocks within one Standard Frame.
+    BlocksPerFrame,
+    /// Maximum total number of blocks across all Standard Frames.
+    TotalBlocks,
+}
+
 /// Errors returned while structurally inspecting encoded Zstandard data.
 ///
 /// The enum is [`non_exhaustive`](https://doc.rust-lang.org/reference/attributes/type_system.html#the-non_exhaustive-attribute):
@@ -7,7 +18,7 @@ use std::fmt;
 /// validation rules can add error categories without freezing the v0.1 set.
 ///
 /// Offsets are zero-based byte offsets from the beginning of the input passed
-/// to [`crate::inspect`].
+/// to [`crate::inspect`] or [`crate::inspect_with_limits`].
 #[derive(Debug, Clone, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum ZstdError {
@@ -66,6 +77,15 @@ pub enum ZstdError {
         /// Maximum decoded size possible from the parsed block metadata.
         maximum: u128,
     },
+    /// A caller-provided inspection resource limit was exhausted.
+    ResourceLimitExceeded {
+        /// Offset of the frame magic or block header that would exceed the limit.
+        offset: u64,
+        /// Resource category whose limit was exhausted.
+        resource: ResourceLimitKind,
+        /// Configured maximum count for the resource.
+        limit: usize,
+    },
     /// Checked offset, length, or conversion arithmetic overflowed.
     ArithmeticOverflow {
         /// Best available byte offset associated with the failed arithmetic.
@@ -120,6 +140,14 @@ impl fmt::Display for ZstdError {
             } => write!(
                 f,
                 "frame content size {declared} at byte offset {offset} is outside decoded-size bounds {minimum}..={maximum}"
+            ),
+            Self::ResourceLimitExceeded {
+                offset,
+                resource,
+                limit,
+            } => write!(
+                f,
+                "inspection resource limit {resource:?} exceeded at byte offset {offset}: limit is {limit}"
             ),
             Self::ArithmeticOverflow { offset } => {
                 write!(f, "offset arithmetic overflow at byte offset {offset}")

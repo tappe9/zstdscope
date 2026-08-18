@@ -355,3 +355,51 @@ The initial design review resolved the following:
 6. **Dependencies:** keep the core dependency-light; serialization is optional and CLI dependencies stay outside the core.
 7. **Licensing:** the project is `MIT OR Apache-2.0`.
 8. **Empty input:** strict v0.1 inspection requires at least one complete frame and rejects empty input.
+
+## 16. Configurable metadata resource limits
+
+Issue #34 adds an opt-in resource-budget API without changing the original `inspect(&[u8])` contract:
+
+```rust
+pub struct InspectionLimits {
+    pub max_frames: usize,
+    pub max_blocks_per_frame: usize,
+    pub max_total_blocks: usize,
+}
+
+pub fn inspect_with_limits(
+    input: &[u8],
+    limits: InspectionLimits,
+) -> Result<ZstdFile, ZstdError>;
+```
+
+`inspect(&[u8])` remains the convenience entry point and does not impose frame/block count limits. Callers that accept untrusted or externally supplied inputs should prefer `inspect_with_limits` with an application-appropriate metadata budget.
+
+Limit semantics are intentionally count based:
+
+- `max_frames` counts Standard and Skippable Frames;
+- `max_blocks_per_frame` limits blocks within each Standard Frame;
+- `max_total_blocks` limits blocks across all Standard Frames in the complete input;
+- reaching a configured count is allowed; attempting to parse one additional affected structure fails;
+- the error offset is the start of the frame magic or block header that would exceed the budget;
+- when both block limits are exhausted at the same block, the more specific per-frame limit is reported first.
+
+Limit exhaustion uses a typed error:
+
+```rust
+pub enum ResourceLimitKind {
+    Frames,
+    BlocksPerFrame,
+    TotalBlocks,
+}
+
+ZstdError::ResourceLimitExceeded {
+    offset: u64,
+    resource: ResourceLimitKind,
+    limit: usize,
+}
+```
+
+The count limits do not impose an input-byte limit and do not make the in-memory API streaming. The caller still owns the complete input slice. They also do not introduce payload-sized allocations: opaque Block and Skippable payload bytes continue to be skipped and represented by spans. Streaming/file-backed inspection remains a separate future API concern.
+
+A limit can be zero. In that case, the first attempt to parse the affected resource returns `ResourceLimitExceeded` at that resource's starting offset. The unlimited legacy `inspect(&[])` behavior is unchanged and still reports the existing typed EOF/truncation error for empty input.

@@ -34,15 +34,17 @@
 
 mod cursor;
 mod error;
+mod limits;
 mod model;
 mod parser;
 
-pub use error::ZstdError;
+pub use error::{ResourceLimitKind, ZstdError};
+pub use limits::InspectionLimits;
 pub use model::{
     Block, BlockType, ByteSpan, ContentChecksum, DictionaryId, Frame, FrameContentSize,
     FrameHeader, FrameKind, SkippableFrame, StandardFrame, ZstdFile,
 };
-pub use parser::inspect;
+pub use parser::{inspect, inspect_with_limits};
 
 #[cfg(test)]
 mod cursor_tests;

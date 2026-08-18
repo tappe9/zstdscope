@@ -81,6 +81,24 @@ Public APIは次の形です。
 pub fn inspect(data: &[u8]) -> Result<ZstdFile, ZstdError>;
 ```
 
+`inspect()`は従来どおりFrame/Block件数に上限を設けない簡潔なAPIです。外部から受け取った入力などにmetadata件数の上限を設けたい場合は、`inspect_with_limits()`を利用できます。
+
+```rust
+use zstdscope::{InspectionLimits, inspect_with_limits};
+
+let limits = InspectionLimits {
+    max_frames: 1_024,
+    max_blocks_per_frame: 2_048,
+    max_total_blocks: 100_000,
+};
+
+let file = inspect_with_limits(&bytes, limits)?;
+```
+
+上記の値は例であり、すべての用途に対する安全なdefault値ではありません。用途と想定入力に応じて設定してください。設定値ちょうどまでは許可され、さらに1件のFrame/Blockを解析しようとした時点で、対象構造の開始offsetを持つ`ZstdError::ResourceLimitExceeded`を返します。
+
+この制限はFrame/Block metadataの**件数**を制御するもので、入力byte数そのものを制限したりstreaming化したりするものではありません。Block/Skippable payloadを解析結果へコピーしない既存方針も維持します。
+
 Public API方針は[Public API設計](docs/API-DESIGN.md)で管理しています。
 
 ## CLI
@@ -139,7 +157,7 @@ Parserでは特に以下を重視します。
 - v0.1ではproject codeに`unsafe`を使用しない
 - Zstdの公開仕様を根拠に実装する
 
-v0.1のCLIは入力ファイル全体をメモリへ読み込み、parserもframe/block metadataをeagerに保持します。非常に大きいファイルや大量metadataを含む入力向けのresource limit、streaming/file-backed APIは後続milestoneで整備します。
+CLIとparserは引き続き入力全体をメモリ上で扱います。`inspect_with_limits()`によりFrame/Block metadata件数は制限できますが、入力ファイル自体のbyte数は制限しません。streaming/file-backed APIは後続milestoneで整備します。
 
 ## ライセンス
 
