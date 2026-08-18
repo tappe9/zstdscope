@@ -8,6 +8,20 @@ const STANDARD_MAGIC: u32 = 0xFD2F_B528;
 const SKIPPABLE_MAGIC_MIN: u32 = 0x184D_2A50;
 const SKIPPABLE_MAGIC_MAX: u32 = 0x184D_2A5F;
 
+/// Inspects one or more concatenated Zstandard frames without decompressing them.
+///
+/// The input must contain at least one complete Standard or Skippable Frame and
+/// must end exactly at a frame boundary. Returned spans use zero-based encoded
+/// byte offsets from the beginning of `input`.
+///
+/// Standard Frame block contents are treated as opaque bytes. Optional content
+/// checksums are consumed and exposed as stored metadata but are not verified.
+///
+/// # Errors
+///
+/// Returns [`ZstdError`] for malformed or truncated input, unsupported top-level
+/// magic values, reserved encodings, invalid structural block sizes, or checked
+/// arithmetic failures.
 pub fn inspect(input: &[u8]) -> Result<ZstdFile, ZstdError> {
     let input_size = u64::try_from(input.len())
         .map_err(|_| ZstdError::ArithmeticOverflow { offset: u64::MAX })?;
