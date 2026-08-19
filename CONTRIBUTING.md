@@ -47,21 +47,29 @@ Keep pull requests focused. A good parser PR should explain:
 
 Avoid mixing large unrelated formatting/refactoring changes with parser semantic changes.
 
+## Rust version and dependency policy
+
+The workspace Minimum Supported Rust Version (MSRV) is **Rust 1.85.0**. This is the compiler floor for Rust 2024 edition and has been verified against the complete workspace with the committed dependency resolution. CI tests both Rust 1.85.0 and the current stable toolchain.
+
+The root `Cargo.lock` is committed intentionally because this repository contains both the reusable library and the `zstdscope` CLI binary. The lockfile makes workspace development, CI, release validation, and future CLI binary builds reproducible. Downstream users of the `zstdscope` library continue to resolve dependencies in their own applications; the repository lockfile is not imposed on library consumers.
+
+Dependency updates should update `Cargo.lock` intentionally and must keep both the MSRV and stable CI jobs green. Raising the MSRV is a compatibility change and should be explicit in the PR and release documentation rather than occurring accidentally through a dependency update.
+
 ## Validation
 
 Pull requests are expected to pass the repository CI. The current quality gates include:
 
 ```bash
 cargo fmt --check
-cargo clippy --workspace --all-targets --all-features -- -D warnings
-cargo test --workspace --all-features
-RUSTDOCFLAGS="-D warnings" cargo doc -p zstdscope --all-features --no-deps
-cargo test -p zstdscope --no-default-features
-cargo package -p zstdscope --list
-cargo publish -p zstdscope --dry-run
+cargo clippy --workspace --all-targets --all-features --locked -- -D warnings
+cargo test --workspace --all-features --locked
+RUSTDOCFLAGS="-D warnings" cargo doc -p zstdscope --all-features --no-deps --locked
+cargo test -p zstdscope --no-default-features --locked
+cargo package -p zstdscope --list --locked
+cargo publish -p zstdscope --dry-run --locked
 ```
 
-Workspace tests also run on Ubuntu, Windows, and macOS.
+The workspace is also checked and tested with Rust 1.85.0, and workspace tests run on current stable Rust across Ubuntu, Windows, and macOS.
 
 Reference-generated fixtures intended to be fully valid should document their official-zstd generation commands and should be checked with `zstd --test` when regenerated. Hand-built fixtures must state whether they prove full validity, only the structural envelope understood by the current parser, or intentional malformed behavior.
 
