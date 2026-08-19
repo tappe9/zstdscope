@@ -1,0 +1,41 @@
+name: MSRV Probe
+
+on:
+  pull_request:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  probe:
+    name: Rust 1.85.0 probe
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install Rust 1.85.0
+        uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
+        with:
+          toolchain: 1.85.0
+
+      - name: Show toolchain
+        run: rustc --version && cargo --version
+
+      - name: Generate lockfile
+        run: cargo generate-lockfile
+
+      - name: Check workspace
+        run: cargo check --workspace --all-targets --all-features --locked
+
+      - name: Test workspace
+        run: cargo test --workspace --all-features --locked
+
+      - name: Print generated lockfile
+        shell: bash
+        run: |
+          echo '---CARGO_LOCK_BEGIN---'
+          cat Cargo.lock
+          echo '---CARGO_LOCK_END---'
