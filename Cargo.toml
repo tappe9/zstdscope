@@ -3,6 +3,7 @@ members = [
     "crates/zstdscope",
     "crates/zstdscope-cli",
 ]
+exclude = ["fuzz"]
 resolver = "3"
 
 [workspace.package]
