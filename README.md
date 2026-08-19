@@ -212,6 +212,7 @@ ZstdScope is not intended to be:
 - [Architecture](ARCHITECTURE.md)
 - [Zstandard format notes](docs/ZSTD-FORMAT.md)
 - [Public API design](docs/API-DESIGN.md)
+- [Fuzzing guide](FUZZING.md)
 - [Roadmap](ROADMAP.md)
 - [Architecture decision records](docs/adr/)
 
@@ -230,6 +231,8 @@ Where the current reference specification and the RFC differ, the difference mus
 ZstdScope treats every input byte as untrusted. Parser reads and skips are bounds-checked, offset/size arithmetic is checked, opaque payloads are not copied into the inspection model, and the project forbids authored `unsafe` Rust in the core crate.
 
 The parser and CLI remain intentionally in-memory. `inspect_with_limits()` can bound frame/block metadata counts for untrusted inputs, while `inspect()` retains the original unlimited count behavior. The complete input is still resident in memory; streaming/file-backed inspection remains later hardening work.
+
+Parser fuzzing is available through `cargo-fuzz`; successful fuzz parses are also checked against structural model invariants. See [FUZZING.md](FUZZING.md) for setup, execution, and regression-handling instructions. Fuzzing is manual initially and is not part of normal pull-request CI.
 
 See [SECURITY.md](SECURITY.md) for the project security policy.
 
