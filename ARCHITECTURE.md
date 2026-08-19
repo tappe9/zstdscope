@@ -112,6 +112,7 @@ The CLI owns:
 
 - command-line argument parsing;
 - reading an input file;
+- applying CLI-specific encoded-input size policy before parsing;
 - selecting text or JSON output;
 - rendering diagnostics;
 - mapping failures to process exit codes.
@@ -291,7 +292,9 @@ Benefits:
 - result types do not need lifetimes tied to the source slice;
 - future WebAssembly integration is easier.
 
-A malicious input can still contain a very large number of real frame/block headers, so metadata counts are a resource consideration. The v0.1 design must leave room for future configurable limits without changing the fundamental result model.
+A malicious input can still contain a very large number of real frame/block headers, so metadata counts are a resource consideration. `inspect_with_limits()` addresses that concern with configurable frame/block count budgets without changing the fundamental result model.
+
+The public library APIs still require the caller to own the complete input slice. Metadata-count limits therefore do not bound the caller's input buffer. File-size policy belongs to the file-reading application layer: the CLI applies a separate default 256 MiB encoded-input guard, while an accepted input remains fully resident in memory during inspection.
 
 ## 9. Error architecture
 
@@ -309,6 +312,8 @@ The accepted direction uses a typed `ZstdError` marked `#[non_exhaustive]`. Repr
 Human-readable `Display` messages are important, but callers must be able to match error categories without parsing strings.
 
 Empty input and trailing partial top-level magic may use the same typed EOF/truncation error category as other incomplete structures.
+
+CLI-only resource policy failures, such as exceeding the configured encoded-input byte limit, remain structured CLI errors rather than `ZstdError` variants because they are not Zstandard format errors.
 
 ## 10. Validation policy
 
@@ -345,15 +350,17 @@ The CLI enables serialization support for `--json`. JSON field names and seriali
 
 ## 12. CLI architecture
 
-Initial command:
+Current command:
 
 ```text
-zstdscope inspect <FILE> [--json]
+zstdscope inspect <FILE> [--json] [--max-input-bytes <BYTES>]
 ```
 
-v0.1 may read the file into memory and pass a slice to the library. This is simple and consistent with the accepted initial API, but it is a known limitation for very large files.
+The CLI keeps parsing in the library. It opens the input file, rejects files larger than the configured byte limit before the full read when file metadata already proves the limit would be exceeded, and also caps the actual read at one byte beyond the limit so file growth cannot silently bypass the configured boundary. The default limit is 268,435,456 bytes (256 MiB); callers can deliberately raise or lower it with `--max-input-bytes`.
 
-A streaming/file-backed inspection API is a later milestone and must not be simulated inside the CLI with duplicate parsing code.
+After the bounded read succeeds, the CLI passes the complete byte slice to the existing public `inspect(&[u8])` API. The CLI does not contain an independent Zstandard parser, and the library API contract is unchanged.
+
+This input-size guard bounds the encoded input buffer for the default CLI path but does not make inspection streaming: accepted input remains resident in memory, and metadata allocations remain governed separately by parser behavior or `inspect_with_limits()`. A streaming/file-backed inspection API is a later milestone and must not be simulated inside the CLI with duplicate parsing code.
 
 ## 13. Dependency policy
 
@@ -402,10 +409,14 @@ Primary controls:
 - centralized bounds-checked cursor;
 - checked integer arithmetic;
 - no copies of opaque payload data;
+- configurable metadata-count limits for callers that opt into them;
+- a default bounded encoded-input read in the CLI;
 - no project-authored `unsafe` in the initial parser;
 - typed errors;
 - targeted boundary tests;
 - fuzz testing.
+
+The CLI's default 256 MiB guard reduces the risk of an unexpectedly large whole-file allocation in normal CLI use. Raising `--max-input-bytes` is an explicit choice to accept a larger input buffer; it does not change the parser's in-memory architecture.
 
 The "arbitrary input does not panic" invariant refers to malformed parser input; it does not claim recoverability from process-level failures such as global allocator exhaustion.
 
@@ -420,6 +431,10 @@ For bit-field calculations, cursor reads, field-width rules, size derivation, ch
 ### Parser integration tests
 
 For complete standard frames, skippable frames, concatenation, empty/truncated input, and malformed streams.
+
+### CLI boundary tests
+
+For input-size limits, exact-boundary acceptance, rejection before parsing, diagnostic behavior, and CLI help/default-policy visibility.
 
 ### Reference-generated fixtures
 
@@ -467,5 +482,7 @@ The v0.1 architecture is governed by:
 - ADR 0002 — separate parser core and CLI crates;
 - ADR 0003 — start with an in-memory `&[u8]` inspection API;
 - ADR 0004 — v0.1 public API and licensing policy.
+
+Issue #37 adds a CLI-specific bounded-read policy without changing the public parser API, so it does not supersede ADR 0003 or require a new public parsing architecture decision.
 
 A future implementation that intentionally diverges from these decisions should introduce a new ADR rather than silently changing the architecture.

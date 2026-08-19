@@ -147,6 +147,20 @@ cargo run -p zstdscope-cli -- inspect sample.zst
 
 The output reports frame type and boundaries, header metadata, block types and sizes, Skippable payload metadata, and stored checksum metadata when present.
 
+### Large input files
+
+The CLI still uses the in-memory library API, so an accepted input file is resident in memory while it is inspected. To keep the default CLI behavior bounded, `zstdscope inspect` rejects encoded input larger than **268,435,456 bytes (256 MiB)** before parsing.
+
+Raise or lower that boundary explicitly with `--max-input-bytes`:
+
+```text
+zstdscope inspect large.zst --max-input-bytes 1073741824
+```
+
+Raising the limit also raises the maximum memory commitment for the encoded input buffer. The CLI checks the file size before the full read when possible and also bounds the actual read, so a file that grows while being read cannot silently bypass the configured limit.
+
+This CLI byte limit is separate from `inspect_with_limits()`, which only limits frame/block metadata counts in the library. Neither mechanism makes inspection streaming. A future streaming/file-backed library API remains the path for files that should not be held fully in memory.
+
 ### JSON output
 
 Use `--json` for machine-readable output:
@@ -163,7 +177,7 @@ cargo run -p zstdscope-cli -- inspect sample.zst --json
 
 JSON field names and serialized enum values use explicit `snake_case` representations. `FrameKind` uses a tagged `type` / `data` shape, and Inspector-specific distinctions such as absent versus explicitly encoded zero Dictionary IDs and RLE declared versus encoded sizes are preserved.
 
-I/O and parse failures return a non-zero exit status, write diagnostics to stderr, and do not emit partial-success JSON. Output write failures are handled without panicking; a downstream process closing a pipe normally is treated as a normal CLI termination.
+I/O and parse failures return a non-zero exit status, write diagnostics to stderr, and do not emit partial-success JSON. An input that exceeds the CLI byte limit also returns a non-zero exit status with a structured CLI error. Output write failures are handled without panicking; a downstream process closing a pipe normally is treated as a normal CLI termination.
 
 ### Release distribution
 
@@ -230,7 +244,7 @@ Where the current reference specification and the RFC differ, the difference mus
 
 ZstdScope treats every input byte as untrusted. Parser reads and skips are bounds-checked, offset/size arithmetic is checked, opaque payloads are not copied into the inspection model, and the project forbids authored `unsafe` Rust in the core crate.
 
-The parser and CLI remain intentionally in-memory. `inspect_with_limits()` can bound frame/block metadata counts for untrusted inputs, while `inspect()` retains the original unlimited count behavior. The complete input is still resident in memory; streaming/file-backed inspection remains later hardening work.
+The public parser APIs remain intentionally in-memory. `inspect_with_limits()` can bound frame/block metadata counts for untrusted inputs, while `inspect()` retains the original unlimited count behavior. The CLI adds a separate default 256 MiB encoded-input guard with `--max-input-bytes` as an explicit override, but any accepted CLI input is still held fully in memory. Streaming/file-backed inspection remains later hardening work.
 
 Parser fuzzing is available through `cargo-fuzz`; successful fuzz parses are also checked against structural model invariants. See [FUZZING.md](FUZZING.md) for setup, execution, and regression-handling instructions. Fuzzing is manual initially and is not part of normal pull-request CI.
 
