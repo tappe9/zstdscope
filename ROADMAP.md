@@ -118,4 +118,4 @@ Potential criteria:
 
 ## Guiding rule
 
-Prefer small, independently useful milestones. Do not turn ZstdScope into a decompressor merely because deeper inspection eventually requires understanding decoder structures cleanly.
+Prefer small, independently useful milestones. Do not turn ZstdScope into a decompressor merely because deeper inspection eventually requires understanding decoder structures.
