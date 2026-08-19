@@ -88,11 +88,71 @@ fn missing_file_returns_nonzero_and_writes_only_to_stderr() {
     assert!(stderr.contains(path.to_string_lossy().as_ref()));
 }
 
+#[test]
+fn input_above_explicit_limit_is_rejected_with_a_clear_diagnostic() {
+    let input = minimal_standard_frame();
+    let output = run_inspect_with_limit(&input, (input.len() - 1) as u64);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let stderr = utf8(output.stderr);
+    assert!(stderr.contains("input too large:"));
+    assert!(stderr.contains("9 bytes"));
+    assert!(stderr.contains("8 bytes"));
+    assert!(stderr.contains("--max-input-bytes"));
+}
+
+#[test]
+fn input_equal_to_explicit_limit_is_accepted() {
+    let input = minimal_standard_frame();
+    let output = run_inspect_with_limit(&input, input.len() as u64);
+
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+}
+
+#[test]
+fn input_limit_is_checked_before_parsing() {
+    let malformed = vec![0xFF; 9];
+    let output = run_inspect_with_limit(&malformed, 8);
+
+    assert!(!output.status.success());
+    assert!(output.stdout.is_empty());
+    let stderr = utf8(output.stderr);
+    assert!(stderr.contains("input too large:"));
+    assert!(!stderr.contains("parse error:"));
+}
+
+#[test]
+fn inspect_help_documents_the_default_input_limit() {
+    let output = Command::new(binary())
+        .arg("inspect")
+        .arg("--help")
+        .output()
+        .expect("zstdscope binary must start");
+
+    assert!(output.status.success());
+    let stdout = utf8(output.stdout);
+    assert!(stdout.contains("--max-input-bytes"));
+    assert!(stdout.contains("268435456"));
+}
+
 fn run_inspect(input: &[u8]) -> Output {
     let file = TempInput::new(input);
     Command::new(binary())
         .arg("inspect")
         .arg(&file.path)
+        .output()
+        .expect("zstdscope binary must start")
+}
+
+fn run_inspect_with_limit(input: &[u8], max_input_bytes: u64) -> Output {
+    let file = TempInput::new(input);
+    Command::new(binary())
+        .arg("inspect")
+        .arg(&file.path)
+        .arg("--max-input-bytes")
+        .arg(max_input_bytes.to_string())
         .output()
         .expect("zstdscope binary must start")
 }
