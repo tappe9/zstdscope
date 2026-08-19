@@ -4,7 +4,12 @@ ZstdScope parses untrusted binary input, so parser safety is a core project requ
 
 ## Supported versions
 
-ZstdScope is currently pre-release and has no supported published version yet. This section will be updated when releases begin.
+ZstdScope is pre-1.0. Only the latest published pre-1.0 release receives security fixes. Older pre-1.0 releases become unsupported when a newer release is published.
+
+| Release | Security fixes |
+| --- | --- |
+| Latest published pre-1.0 release | Yes |
+| Older pre-1.0 releases | No |
 
 ## Reporting a vulnerability
 
@@ -38,7 +43,9 @@ Security-sensitive parser properties include:
 
 ## Fuzzing
 
-Fuzz testing is planned as part of the parser's quality strategy. The baseline invariant is:
+Fuzz testing is available as a manual developer workflow through `cargo-fuzz`; see [FUZZING.md](FUZZING.md). It is intentionally not part of normal pull-request CI.
+
+The baseline invariant is:
 
 ```text
 any byte sequence -> successful inspection or typed error, never panic
