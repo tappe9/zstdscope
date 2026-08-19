@@ -24,7 +24,10 @@ pub fn assert_model_invariants(input: &[u8], file: &ZstdFile) {
                     skippable.payload_span.length,
                     u64::from(skippable.declared_payload_size)
                 );
-                assert_eq!(assert_span_within(skippable.payload_span, file.input_size), frame_end);
+                assert_eq!(
+                    assert_span_within(skippable.payload_span, file.input_size),
+                    frame_end
+                );
                 assert!(skippable.variant <= 15);
             }
         }
@@ -44,7 +47,10 @@ fn assert_standard_frame_invariants(
     assert_eq!(standard.magic_span.offset, frame_span.offset);
     assert_eq!(standard.magic_span.length, 4);
     assert_eq!(standard.header.span.offset, frame_span.offset + 4);
-    assert_eq!(standard.header.descriptor_span.offset, standard.header.span.offset);
+    assert_eq!(
+        standard.header.descriptor_span.offset,
+        standard.header.span.offset
+    );
     assert_eq!(standard.header.descriptor_span.length, 1);
     assert_span_within(standard.header.span, frame_end);
     assert_span_within(standard.header.descriptor_span, frame_end);
@@ -61,9 +67,11 @@ fn assert_standard_frame_invariants(
 
     assert!(!standard.blocks.is_empty());
     assert!(standard.blocks.last().is_some_and(|block| block.is_last));
-    assert!(standard.blocks[..standard.blocks.len() - 1]
-        .iter()
-        .all(|block| !block.is_last));
+    assert!(
+        standard.blocks[..standard.blocks.len() - 1]
+            .iter()
+            .all(|block| !block.is_last)
+    );
 
     let mut expected_block_offset = standard
         .header
@@ -77,7 +85,10 @@ fn assert_standard_frame_invariants(
         let header_end = assert_span_within(block.header_span, frame_end);
         assert_eq!(header_end, block.content_span.offset);
         let content_end = assert_span_within(block.content_span, frame_end);
-        assert_eq!(block.content_span.length, u64::from(block.encoded_content_size));
+        assert_eq!(
+            block.content_span.length,
+            u64::from(block.encoded_content_size)
+        );
         expected_block_offset = content_end;
     }
 
