@@ -49,13 +49,14 @@ Status: **in progress on `main`; not yet released.**
 Already implemented on `main` after v0.1.0:
 
 - configurable parser resource limits;
-- a manual `cargo-fuzz` target with structural model-invariant checks on successful parses.
+- a manual `cargo-fuzz` target with structural model-invariant checks on successful parses;
+- bounded CLI file reads with a default 256 MiB encoded-input guard and explicit `--max-input-bytes` override.
 
 Remaining candidate scope:
 
 - richer field-level spans for hex-view mapping;
 - more detailed diagnostics;
-- streaming or file-backed inspection API for very large files;
+- streaming or file-backed library inspection API for very large files;
 - scheduled or continuous fuzzing automation;
 - JSON schema documentation;
 - CLI output refinements.

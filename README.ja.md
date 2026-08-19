@@ -97,7 +97,7 @@ let file = inspect_with_limits(&bytes, limits)?;
 
 上記の値は例であり、すべての用途に対する安全なdefault値ではありません。用途と想定入力に応じて設定してください。設定値ちょうどまでは許可され、さらに1件のFrame/Blockを解析しようとした時点で、対象構造の開始offsetを持つ`ZstdError::ResourceLimitExceeded`を返します。
 
-この制限はFrame/Block metadataの**件数**を制御するもので、入力byte数そのものを制限したりstreaming化したりするものではありません。Block/Skippable payloadを解析結果へコピーしない既存方針も維持します。
+この制限はFrame/Block metadataの**件数**を制御するもので、callerが保持する入力sliceのbyte数を制限したりstreaming化したりするものではありません。Block/Skippable payloadを解析結果へコピーしない既存方針も維持します。
 
 Public API方針は[Public API設計](docs/API-DESIGN.md)で管理しています。
 
@@ -115,7 +115,21 @@ cargo run -p zstdscope-cli -- inspect sample.zst
 cargo run -p zstdscope-cli -- inspect sample.zst --json
 ```
 
-I/O errorやparse errorは非0で終了し、diagnosticをstderrへ出力します。pipe先が通常どおり先に閉じた場合のbroken pipeはpanicさせず正常終了として扱います。
+### 大きな入力ファイル
+
+CLIは引き続きin-memoryのlibrary APIを利用するため、受け入れた入力ファイルは解析中にメモリ上へ保持されます。defaultのCLI動作をboundedにするため、`zstdscope inspect`は **268,435,456 bytes（256 MiB）** を超えるencoded inputをparse前に拒否します。
+
+上限を明示的に変更する場合は`--max-input-bytes`を指定します。
+
+```text
+zstdscope inspect large.zst --max-input-bytes 1073741824
+```
+
+上限を引き上げると、encoded input bufferに対して許容する最大メモリ量も増えます。CLIは可能な場合は全体read前にfile sizeを確認し、実際のread自体にも上限を適用するため、read中にファイルが増加しても設定した上限をそのまま通過しません。
+
+このCLIのbyte上限と、libraryの`inspect_with_limits()`によるFrame/Block metadata件数上限は別のresource policyです。どちらもstreaming化するものではありません。入力全体をメモリへ保持したくない非常に大きなファイルについては、将来のstreaming/file-backed library APIで対応する方針です。
+
+I/O error、parse error、input size limit超過は非0で終了し、diagnosticをstderrへ出力します。pipe先が通常どおり先に閉じた場合のbroken pipeはpanicさせず正常終了として扱います。
 
 再利用可能な`zstdscope` libraryは[crates.io](https://crates.io/crates/zstdscope)で公開済みです。API documentationは[docs.rs](https://docs.rs/zstdscope)で確認できます。
 
@@ -157,7 +171,7 @@ Parserでは特に以下を重視します。
 - v0.1ではproject codeに`unsafe`を使用しない
 - Zstdの公開仕様を根拠に実装する
 
-CLIとparserは引き続き入力全体をメモリ上で扱います。`inspect_with_limits()`によりFrame/Block metadata件数は制限できますが、入力ファイル自体のbyte数は制限しません。streaming/file-backed APIは後続milestoneで整備します。
+Public parser APIは引き続き入力全体をメモリ上で扱います。`inspect_with_limits()`はFrame/Block metadata件数を制限し、CLIはそれとは別にdefault 256 MiBのencoded-input guardを持ちます。`--max-input-bytes`で明示的に上限を変更できますが、受け入れたCLI入力は依然として全体がメモリ上に存在します。streaming/file-backed APIは後続milestoneで整備します。
 
 ## ライセンス
 
