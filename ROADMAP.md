@@ -4,7 +4,7 @@ This roadmap is directional. Milestones may change as implementation and specifi
 
 ## v0.1 — Structural inspector MVP
 
-Status: **implemented; final integration review tracked in #14.**
+Status: **completed and released as v0.1.0.**
 
 Goal: provide a safe Pure Rust parser for top-level Zstandard structure plus a usable CLI.
 
@@ -44,13 +44,19 @@ The parser's malformed-input safety invariant is covered by targeted boundary an
 
 ## v0.2 — Inspector ergonomics and robustness
 
-Candidate scope:
+Status: **in progress on `main`; not yet released.**
+
+Already implemented on `main` after v0.1.0:
+
+- configurable parser resource limits;
+- a manual `cargo-fuzz` target with structural model-invariant checks on successful parses.
+
+Remaining candidate scope:
 
 - richer field-level spans for hex-view mapping;
-- configurable parser resource limits;
 - more detailed diagnostics;
 - streaming or file-backed inspection API for very large files;
-- initial fuzzing in continuous integration or OSS-Fuzz-compatible structure;
+- scheduled or continuous fuzzing automation;
 - JSON schema documentation;
 - CLI output refinements.
 
