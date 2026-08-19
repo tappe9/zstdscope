@@ -4,6 +4,7 @@ version.workspace = true
 edition.workspace = true
 license.workspace = true
 repository.workspace = true
+readme.workspace = true
 description = "Pure Rust parser and structural inspector for Zstandard (Zstd) frames, headers, blocks, offsets, and sizes."
 documentation = "https://docs.rs/zstdscope"
 keywords = ["zstd", "zstandard", "parser", "compression", "binary-format"]
