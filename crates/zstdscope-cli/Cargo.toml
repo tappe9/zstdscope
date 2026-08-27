@@ -5,8 +5,11 @@ edition.workspace = true
 rust-version.workspace = true
 license.workspace = true
 repository.workspace = true
-publish = false
-description = "Command-line interface for ZstdScope."
+readme.workspace = true
+description = "Command-line structural inspector for Zstandard files."
+documentation = "https://docs.rs/zstdscope"
+keywords = ["zstd", "zstandard", "inspection", "compression", "cli"]
+categories = ["command-line-utilities", "compression"]
 
 [[bin]]
 name = "zstdscope"
@@ -15,5 +18,6 @@ doc = false
 
 [dependencies]
 clap = { version = "4.6", features = ["derive"] }
+serde = { version = "1.0", features = ["derive"] }
 serde_json = "1.0"
-zstdscope = { path = "../zstdscope", features = ["serde"] }
+zstdscope = { version = "0.2.0", path = "../zstdscope" }

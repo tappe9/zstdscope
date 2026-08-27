@@ -5,7 +5,7 @@ use std::{
     sync::atomic::{AtomicU64, Ordering},
 };
 
-use serde_json::Value;
+use serde_json::{Value, json};
 
 const STANDARD_MAGIC: u32 = 0xFD2F_B528;
 const SKIPPABLE_MAGIC: u32 = 0x184D_2A55;
@@ -15,20 +15,94 @@ const REFERENCE_COMPRESSED_CHECKSUM: &str =
 static NEXT_TEMP_FILE: AtomicU64 = AtomicU64::new(0);
 
 #[test]
-fn json_standard_frame_has_explicit_snake_case_shape() {
+fn json_v1_minimal_standard_frame_matches_schema_fixture() {
+    let output = run_json(&minimal_standard_frame());
+
+    assert!(output.status.success());
+    assert!(output.stderr.is_empty());
+    let actual = parse_json(output.stdout);
+
+    let expected = json!({
+        "schema_version": 1,
+        "input_size": "9",
+        "frames": [
+            {
+                "index": 0,
+                "span": {
+                    "offset": "0",
+                    "length": "9"
+                },
+                "kind": {
+                    "type": "standard",
+                    "data": {
+                        "magic_span": {
+                            "offset": "0",
+                            "length": "4"
+                        },
+                        "header": {
+                            "span": {
+                                "offset": "4",
+                                "length": "2"
+                            },
+                            "descriptor": 0,
+                            "descriptor_span": {
+                                "offset": "4",
+                                "length": "1"
+                            },
+                            "window_descriptor_span": {
+                                "offset": "5",
+                                "length": "1"
+                            },
+                            "frame_content_size": null,
+                            "dictionary_id": null,
+                            "window_size": "1024",
+                            "content_checksum_flag": false,
+                            "single_segment": false,
+                            "unused_bit": false
+                        },
+                        "blocks": [
+                            {
+                                "index": 0,
+                                "header_span": {
+                                    "offset": "6",
+                                    "length": "3"
+                                },
+                                "content_span": {
+                                    "offset": "9",
+                                    "length": "0"
+                                },
+                                "block_type": "raw",
+                                "declared_size": 0,
+                                "encoded_content_size": 0,
+                                "is_last": true
+                            }
+                        ],
+                        "content_checksum": null
+                    }
+                }
+            }
+        ]
+    });
+
+    assert_eq!(actual, expected);
+}
+
+#[test]
+fn json_standard_frame_has_explicit_v1_snake_case_shape() {
     let output = run_json(&decode_hex(REFERENCE_COMPRESSED_CHECKSUM));
 
     assert!(output.status.success());
     assert!(output.stderr.is_empty());
     let json = parse_json(output.stdout);
 
-    assert_eq!(json["input_size"], 63);
+    assert_eq!(json["schema_version"], 1);
+    assert_eq!(json["input_size"], "63");
     assert!(json.get("inputSize").is_none());
     assert_eq!(json["frames"][0]["index"], 0);
     assert_eq!(json["frames"][0]["kind"]["type"], "standard");
 
     let standard = &json["frames"][0]["kind"]["data"];
-    assert_eq!(standard["header"]["frame_content_size"]["value"], 10_240);
+    assert_eq!(standard["header"]["frame_content_size"]["value"], "10240");
     assert!(standard["header"].get("frameContentSize").is_none());
     assert_eq!(standard["blocks"][0]["block_type"], "compressed");
     assert_eq!(standard["blocks"][0]["declared_size"], 49);
@@ -45,8 +119,8 @@ fn json_preserves_dictionary_id_absent_vs_explicit_zero() {
     let explicit_zero = parse_json(run_json(&explicit_zero_dictionary_id_frame()).stdout);
     let dictionary_id = &explicit_zero["frames"][0]["kind"]["data"]["header"]["dictionary_id"];
     assert_eq!(dictionary_id["encoded"], 0);
-    assert_eq!(dictionary_id["span"]["offset"], 6);
-    assert_eq!(dictionary_id["span"]["length"], 1);
+    assert_eq!(dictionary_id["span"]["offset"], "6");
+    assert_eq!(dictionary_id["span"]["length"], "1");
 }
 
 #[test]
@@ -57,12 +131,13 @@ fn json_skippable_frame_uses_tagged_snake_case_shape() {
     assert!(output.stderr.is_empty());
     let json = parse_json(output.stdout);
 
+    assert_eq!(json["schema_version"], 1);
     assert_eq!(json["frames"][0]["kind"]["type"], "skippable");
     let skippable = &json["frames"][0]["kind"]["data"];
     assert_eq!(skippable["variant"], 5);
     assert_eq!(skippable["declared_payload_size"], 2);
-    assert_eq!(skippable["payload_span"]["offset"], 8);
-    assert_eq!(skippable["payload_span"]["length"], 2);
+    assert_eq!(skippable["payload_span"]["offset"], "8");
+    assert_eq!(skippable["payload_span"]["length"], "2");
 }
 
 #[test]

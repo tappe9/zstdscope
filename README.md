@@ -9,11 +9,13 @@ ZstdScope is a pure-Rust parser and structural inspection toolkit for the Zstand
 
 The project is intentionally focused on **inspection**, not compression or decompression. It exposes encoded structure and source-byte metadata through a reusable Rust API and a CLI, while leaving compressed block payloads opaque.
 
-> **v0.2.0 is available on [crates.io](https://crates.io/crates/zstdscope).** ZstdScope remains pre-1.0, so the Rust API and JSON representation may still evolve intentionally.
+> **v0.2.0 of the `zstdscope` library is available on [crates.io](https://crates.io/crates/zstdscope).** ZstdScope remains pre-1.0, so the Rust API and versioned CLI JSON contract may still evolve intentionally.
 
 **Links:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.2.0 release](https://github.com/tappe9/zstdscope/releases/tag/v0.2.0)
 
 ## Installation
+
+### Rust library
 
 Add ZstdScope to a Rust project:
 
@@ -34,9 +36,27 @@ For optional Serde serialization support:
 cargo add zstdscope --features serde
 ```
 
+### CLI
+
+The supported CLI package is named `zstdscope-cli`; it installs the `zstdscope` binary. Released CLI versions use crates.io:
+
+```bash
+cargo install zstdscope-cli --locked
+```
+
+Until the first CLI crate release is published, install the current `main` revision without manually cloning the repository:
+
+```bash
+cargo install --git https://github.com/tappe9/zstdscope zstdscope-cli --locked
+```
+
+The crates.io package is the selected release distribution channel. Prebuilt GitHub Release binaries, signatures, and checksums are not currently provided; they may be added only with an explicit, automated release policy.
+
+Source builds are continuously tested on GitHub-hosted Ubuntu x86_64, Windows x86_64, and macOS arm64 runners. Other Rust-supported targets are best effort. This is a source-build support statement, not a promise of prebuilt binaries for those targets.
+
 ## What ZstdScope inspects
 
-The current v0.1 scope includes:
+The current structural scope includes:
 
 - Standard and all 16 Skippable Frame magic values;
 - concatenated frames with exact frame boundaries;
@@ -50,9 +70,7 @@ The current v0.1 scope includes:
 - zero-based source spans for major encoded fields;
 - typed, location-aware parse errors for malformed and truncated input.
 
-Parsing literals, sequences, Huffman tables, FSE tables, and other compressed-block internals is intentionally deferred beyond v0.1.
-
-The parser is strict for the structural envelope implemented by v0.1: it requires at least one complete frame and consumes the entire input. Empty input, malformed structures that v0.1 can validate, unknown top-level magic, reserved encodings, impossible structural sizes, and trailing partial frames are errors. Compressed-block internals and content-checksum validity are intentionally not validated in v0.1.
+Parsing literals, sequences, Huffman tables, FSE tables, and other compressed-block internals is intentionally deferred. The parser requires at least one complete frame and consumes the entire input. Empty input, malformed structures that the current structural layer can validate, unknown top-level magic, reserved encodings, impossible structural sizes, and trailing partial frames are errors. Compressed-block internals and content-checksum validity are intentionally not validated.
 
 ## Rust library
 
@@ -101,7 +119,7 @@ All public offsets are zero-based byte offsets into the encoded input. Opaque bl
 
 ### Configurable resource limits
 
-`inspect()` intentionally preserves the simple, unlimited frame/block-count behavior. Applications that inspect untrusted or externally supplied inputs can instead apply explicit metadata budgets with `inspect_with_limits()`:
+`inspect()` preserves the simple, unlimited frame/block-count behavior. Applications that inspect untrusted or externally supplied inputs can instead apply explicit metadata budgets with `inspect_with_limits()`:
 
 ```rust
 use zstdscope::{InspectionLimits, inspect_with_limits};
@@ -129,7 +147,7 @@ default = []
 serde = ["dep:serde"]
 ```
 
-Enabling the `serde` feature adds `Serialize` support to the public inspection model. Parsing-only users do not require Serde.
+Enabling the `serde` feature adds `Serialize` support to the public inspection model. This library representation is independent from the CLI JSON wire contract. Parsing-only users do not require Serde.
 
 ## CLI
 
@@ -149,7 +167,7 @@ The output reports frame type and boundaries, header metadata, block types and s
 
 ### Large input files
 
-The CLI still uses the in-memory library API, so an accepted input file is resident in memory while it is inspected. To keep the default CLI behavior bounded, `zstdscope inspect` rejects encoded input larger than **268,435,456 bytes (256 MiB)** before parsing.
+The CLI uses the in-memory library API, so an accepted input file is resident in memory while it is inspected. To keep default behavior bounded, `zstdscope inspect` rejects encoded input larger than **268,435,456 bytes (256 MiB)** before parsing.
 
 Raise or lower that boundary explicitly with `--max-input-bytes`:
 
@@ -157,11 +175,11 @@ Raise or lower that boundary explicitly with `--max-input-bytes`:
 zstdscope inspect large.zst --max-input-bytes 1073741824
 ```
 
-Raising the limit also raises the maximum memory commitment for the encoded input buffer. The CLI checks the file size before the full read when possible and also bounds the actual read, so a file that grows while being read cannot silently bypass the configured limit.
+Raising the limit also raises the maximum memory commitment for the encoded input buffer. The CLI checks file size before the full read when possible and also bounds the actual read, so a file that grows while being read cannot silently bypass the configured limit.
 
 This CLI byte limit is separate from `inspect_with_limits()`, which only limits frame/block metadata counts in the library. Neither mechanism makes inspection streaming. A future streaming/file-backed library API remains the path for files that should not be held fully in memory.
 
-### JSON output
+### Versioned JSON output
 
 Use `--json` for machine-readable output:
 
@@ -169,21 +187,21 @@ Use `--json` for machine-readable output:
 zstdscope inspect sample.zst --json
 ```
 
-or from the workspace:
+The CLI emits a dedicated JSON DTO rather than serializing the public Rust model directly. The current wire contract has:
 
-```text
-cargo run -p zstdscope-cli -- inspect sample.zst --json
-```
+- top-level `"schema_version": 1`;
+- explicit `snake_case` field names and enum values;
+- a tagged `type` / `data` frame-kind representation;
+- decimal strings for every Rust `u64` value, including offsets, lengths, input size, window size, and Frame Content Size, so JavaScript consumers do not lose integer precision;
+- JSON numbers for bounded `u8`, `u32`, and `usize` fields;
+- preserved distinctions between absent and explicitly encoded zero Dictionary IDs;
+- preserved RLE declared-size versus encoded-size semantics.
 
-JSON field names and serialized enum values use explicit `snake_case` representations. `FrameKind` uses a tagged `type` / `data` shape, and Inspector-specific distinctions such as absent versus explicitly encoded zero Dictionary IDs and RLE declared versus encoded sizes are preserved.
+Before 1.0, backward-compatible additive fields may remain within schema version 1. Removing or renaming fields, changing field types, changing enum/tag representations, or otherwise breaking existing consumers requires a new `schema_version` and release-note documentation. Human-readable output is a separate contract and is unaffected by JSON DTO refactors.
 
-I/O and parse failures return a non-zero exit status, write diagnostics to stderr, and do not emit partial-success JSON. An input that exceeds the CLI byte limit also returns a non-zero exit status with a structured CLI error. Output write failures are handled without panicking; a downstream process closing a pipe normally is treated as a normal CLI termination.
+I/O and parse failures return a non-zero exit status, write diagnostics to stderr, and do not emit partial-success JSON. An input that exceeds the CLI byte limit also returns a non-zero exit status with a structured CLI error. Output write failures are handled without panicking; a downstream process closing a pipe normally is treated as normal CLI termination.
 
-### Release distribution
-
-The reusable `zstdscope` Rust library is published on [crates.io](https://crates.io/crates/zstdscope), with API documentation on [docs.rs](https://docs.rs/zstdscope).
-
-The `zstdscope-cli` package currently has `publish = false`; CLI binary distribution is intentionally separate and may be added through GitHub Releases or another documented channel later.
+See [ADR 0005](docs/adr/0005-versioned-cli-json.md) for the JSON decision and [ADR 0006](docs/adr/0006-cli-distribution.md) for distribution policy.
 
 ## Workspace
 
@@ -196,7 +214,7 @@ zstdscope/
 └── ARCHITECTURE.md
 ```
 
-The accepted v0.1 API direction is documented in [Public API design](docs/API-DESIGN.md).
+The accepted API direction is documented in [Public API design](docs/API-DESIGN.md).
 
 ## Design principles
 
@@ -206,9 +224,9 @@ ZstdScope aims to:
 - preserve byte-level distinctions useful to inspection and hex-viewer tooling;
 - provide precise diagnostics for malformed or unsupported input;
 - remain safe on untrusted byte input within the documented in-memory/resource model;
-- keep parsing independent from filesystem, terminal, and CLI concerns;
+- keep parsing independent from filesystem, terminal, JSON DTO, and CLI concerns;
 - keep mandatory core dependencies small;
-- remain suitable for a future `wasm32` target.
+- remain suitable for `wasm32-unknown-unknown` compilation.
 
 ## Non-goals
 
@@ -217,8 +235,8 @@ ZstdScope is not intended to be:
 - a compressor;
 - a decompressor;
 - a replacement for the official `zstd` CLI or `libzstd`;
-- a decoder for compressed block internals in v0.1;
-- a content-checksum verifier in v0.1.
+- a decoder for compressed block internals in the current structural scope;
+- a content-checksum verifier.
 
 ## Documentation
 
@@ -226,6 +244,7 @@ ZstdScope is not intended to be:
 - [Architecture](ARCHITECTURE.md)
 - [Zstandard format notes](docs/ZSTD-FORMAT.md)
 - [Public API design](docs/API-DESIGN.md)
+- [Supply-chain policy](docs/SUPPLY-CHAIN.md)
 - [Fuzzing guide](FUZZING.md)
 - [Roadmap](ROADMAP.md)
 - [Architecture decision records](docs/adr/)
@@ -244,11 +263,11 @@ Where the current reference specification and the RFC differ, the difference mus
 
 ZstdScope treats every input byte as untrusted. Parser reads and skips are bounds-checked, offset/size arithmetic is checked, opaque payloads are not copied into the inspection model, and the project forbids authored `unsafe` Rust in the core crate.
 
-The public parser APIs remain intentionally in-memory. `inspect_with_limits()` can bound frame/block metadata counts for untrusted inputs, while `inspect()` retains the original unlimited count behavior. The CLI adds a separate default 256 MiB encoded-input guard with `--max-input-bytes` as an explicit override, but any accepted CLI input is still held fully in memory. Streaming/file-backed inspection remains later hardening work.
+The public parser APIs remain intentionally in-memory. `inspect_with_limits()` can bound frame/block metadata counts for untrusted inputs, while `inspect()` retains unlimited count behavior. The CLI adds a separate default 256 MiB encoded-input guard with `--max-input-bytes` as an explicit override, but any accepted CLI input is still held fully in memory. Streaming/file-backed inspection remains later hardening work.
 
 Parser fuzzing is available through `cargo-fuzz`; successful fuzz parses are also checked against structural model invariants. See [FUZZING.md](FUZZING.md) for setup, execution, and regression-handling instructions. Fuzzing is manual initially and is not part of normal pull-request CI.
 
-See [SECURITY.md](SECURITY.md) for the project security policy.
+CI enforces formatting, Clippy, tests, rustdoc, MSRV, Ubuntu/Windows/macOS tests, package/publish dry-runs, packaged CLI smoke tests, a WebAssembly compile check, and the documented advisory/license/source policy. See [Supply-chain policy](docs/SUPPLY-CHAIN.md) and [SECURITY.md](SECURITY.md).
 
 ## Contributing
 
