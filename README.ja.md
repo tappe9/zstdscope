@@ -9,9 +9,9 @@ ZstdScope は、Zstandard圧縮データ形式の構造を解析・可視化す�
 
 このプロジェクトの主目的は圧縮・展開ではなく、`.zst`などのZstandardストリームに含まれるFrame、Header、Block、offset、sizeなどの構造情報を安全に取得できるAPIを提供することです。
 
-> **v0.1.0を[crates.io](https://crates.io/crates/zstdscope)で公開しています。** pre-1.0のためPublic APIとJSON representationは今後意図的に変更される可能性があります。
+> **v0.2.0を[crates.io](https://crates.io/crates/zstdscope)で公開しています。** pre-1.0のためPublic APIとJSON representationは今後意図的に変更される可能性があります。
 
-**リンク:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.1.0 Release](https://github.com/tappe9/zstdscope/releases/tag/v0.1.0)
+**リンク:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.2.0 Release](https://github.com/tappe9/zstdscope/releases/tag/v0.2.0)
 
 ## インストール
 
@@ -25,7 +25,7 @@ cargo add zstdscope
 
 ```toml
 [dependencies]
-zstdscope = "0.1"
+zstdscope = "0.2"
 ```
 
 Serdeによるserializationを有効にする場合:
