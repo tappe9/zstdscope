@@ -9,9 +9,9 @@ ZstdScope is a pure-Rust parser and structural inspection toolkit for the Zstand
 
 The project is intentionally focused on **inspection**, not compression or decompression. It exposes encoded structure and source-byte metadata through a reusable Rust API and a CLI, while leaving compressed block payloads opaque.
 
-> **v0.1.0 is available on [crates.io](https://crates.io/crates/zstdscope).** ZstdScope remains pre-1.0, so the Rust API and JSON representation may still evolve intentionally.
+> **v0.2.0 is available on [crates.io](https://crates.io/crates/zstdscope).** ZstdScope remains pre-1.0, so the Rust API and JSON representation may still evolve intentionally.
 
-**Links:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.1.0 release](https://github.com/tappe9/zstdscope/releases/tag/v0.1.0)
+**Links:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.2.0 release](https://github.com/tappe9/zstdscope/releases/tag/v0.2.0)
 
 ## Installation
 
@@ -25,7 +25,7 @@ Or add it manually to `Cargo.toml`:
 
 ```toml
 [dependencies]
-zstdscope = "0.1"
+zstdscope = "0.2"
 ```
 
 For optional Serde serialization support:

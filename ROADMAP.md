@@ -44,15 +44,15 @@ The parser's malformed-input safety invariant is covered by targeted boundary an
 
 ## v0.2 — Inspector ergonomics and robustness
 
-Status: **in progress on `main`; not yet released.**
+Status: **completed and released as v0.2.0.**
 
-Already implemented on `main` after v0.1.0:
+Released scope:
 
 - configurable parser resource limits;
 - a manual `cargo-fuzz` target with structural model-invariant checks on successful parses;
 - bounded CLI file reads with a default 256 MiB encoded-input guard and explicit `--max-input-bytes` override.
 
-Remaining candidate scope:
+Deferred candidate scope for later releases:
 
 - richer field-level spans for hex-view mapping;
 - more detailed diagnostics;
