@@ -9,9 +9,9 @@ ZstdScope is a pure-Rust parser and structural inspection toolkit for the Zstand
 
 The project is intentionally focused on **inspection**, not compression or decompression. It exposes encoded structure and source-byte metadata through a reusable Rust API and a CLI, while leaving compressed block payloads opaque.
 
-> **v0.2.0 of the `zstdscope` library is available on [crates.io](https://crates.io/crates/zstdscope).** ZstdScope remains pre-1.0, so the Rust API and versioned CLI JSON contract may still evolve intentionally.
+> **The `zstdscope` library is published as v0.2.0. The v0.3.0 project release publishes `zstdscope-cli` v0.3.0 for the first time.** The packages use independent versions because the Rust API and CLI/JSON compatibility contracts evolve separately.
 
-**Links:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.2.0 release](https://github.com/tappe9/zstdscope/releases/tag/v0.2.0)
+**Links:** [library on crates.io](https://crates.io/crates/zstdscope) · [CLI on crates.io](https://crates.io/crates/zstdscope-cli) · [docs.rs](https://docs.rs/zstdscope) · [changelog](CHANGELOG.md) · [releases](https://github.com/tappe9/zstdscope/releases)
 
 ## Installation
 
@@ -38,13 +38,13 @@ cargo add zstdscope --features serde
 
 ### CLI
 
-The supported CLI package is named `zstdscope-cli`; it installs the `zstdscope` binary. Released CLI versions use crates.io:
+The CLI package is named `zstdscope-cli`; it installs the `zstdscope` binary:
 
 ```bash
-cargo install zstdscope-cli --locked
+cargo install zstdscope-cli --version 0.3.0 --locked
 ```
 
-Until the first CLI crate release is published, install the current `main` revision without manually cloning the repository:
+To install the current repository revision instead of a crates.io release:
 
 ```bash
 cargo install --git https://github.com/tappe9/zstdscope zstdscope-cli --locked
@@ -53,6 +53,8 @@ cargo install --git https://github.com/tappe9/zstdscope zstdscope-cli --locked
 The crates.io package is the selected release distribution channel. Prebuilt GitHub Release binaries, signatures, and checksums are not currently provided; they may be added only with an explicit, automated release policy.
 
 Source builds are continuously tested on GitHub-hosted Ubuntu x86_64, Windows x86_64, and macOS arm64 runners. Other Rust-supported targets are best effort. This is a source-build support statement, not a promise of prebuilt binaries for those targets.
+
+The library and CLI use independent package versions. `zstdscope-cli 0.3.0` depends on the published `zstdscope 0.2.0` API because the parser and public Rust API did not change in the v0.3 project release.
 
 ## What ZstdScope inspects
 
@@ -201,7 +203,7 @@ Before 1.0, backward-compatible additive fields may remain within schema version
 
 I/O and parse failures return a non-zero exit status, write diagnostics to stderr, and do not emit partial-success JSON. An input that exceeds the CLI byte limit also returns a non-zero exit status with a structured CLI error. Output write failures are handled without panicking; a downstream process closing a pipe normally is treated as normal CLI termination.
 
-See [ADR 0005](docs/adr/0005-versioned-cli-json.md) for the JSON decision and [ADR 0006](docs/adr/0006-cli-distribution.md) for distribution policy.
+See [ADR 0005](docs/adr/0005-versioned-cli-json.md) for the JSON decision, [ADR 0006](docs/adr/0006-cli-distribution.md) for distribution policy, and [ADR 0007](docs/adr/0007-independent-package-versioning.md) for package versioning.
 
 ## Workspace
 
@@ -244,6 +246,8 @@ ZstdScope is not intended to be:
 - [Architecture](ARCHITECTURE.md)
 - [Zstandard format notes](docs/ZSTD-FORMAT.md)
 - [Public API design](docs/API-DESIGN.md)
+- [Changelog](CHANGELOG.md)
+- [Release process](docs/RELEASING.md)
 - [Supply-chain policy](docs/SUPPLY-CHAIN.md)
 - [Fuzzing guide](FUZZING.md)
 - [Roadmap](ROADMAP.md)

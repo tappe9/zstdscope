@@ -2,6 +2,8 @@
 
 This roadmap is directional. Milestones may change as implementation and specification review uncover better boundaries.
 
+The reusable `zstdscope` library and the `zstdscope-cli` package use independent versions from the v0.3 project release onward. Repository release notes identify the exact package versions included in each milestone.
+
 ## v0.1 — Structural inspector MVP
 
 Status: **completed and released as v0.1.0.**
@@ -52,11 +54,16 @@ Released scope:
 - a manual `cargo-fuzz` target with structural model-invariant checks on successful parses;
 - bounded CLI file reads with a default 256 MiB encoded-input guard and explicit `--max-input-bytes` override.
 
-## Post-v0.2 maintenance — Contract and distribution hardening
+## v0.3 — Versioned CLI contract, distribution, and supply-chain hardening
 
-Status: **completed on `main`; release publication is a separate release operation.**
+Status: **implementation complete and prepared for release.**
 
-Completed scope:
+Package versions:
+
+- `zstdscope` remains at `0.2.0`; the parser and public Rust API are unchanged;
+- `zstdscope-cli` advances to `0.3.0` for its first crates.io release and the intentional CLI JSON compatibility change.
+
+Release scope:
 
 - dedicated CLI JSON schema-version-1 DTOs, decoupled from the public Rust model;
 - decimal-string representation for JSON values originating from Rust `u64` fields;
@@ -66,7 +73,9 @@ Completed scope:
 - immutable GitHub Actions pins, least-privilege permissions, concurrency controls, and job timeouts;
 - documented `cargo-deny` advisory/license/source policy;
 - weekly Cargo and GitHub Actions Dependabot updates;
-- `wasm32-unknown-unknown` compile-only coverage for the dependency-light core boundary.
+- `wasm32-unknown-unknown` compile-only coverage for the dependency-light core boundary;
+- independent library and CLI package versioning, documented by ADR 0007;
+- a repeatable manual release procedure and project changelog.
 
 Deferred candidate scope for later releases:
 
@@ -77,7 +86,7 @@ Deferred candidate scope for later releases:
 - prebuilt, checksummed, and signed GitHub Release binaries;
 - CLI output refinements.
 
-## v0.3 — Compressed-block structural metadata
+## v0.4 — Compressed-block structural metadata
 
 Candidate scope:
 
@@ -88,7 +97,7 @@ Candidate scope:
 
 This milestone should not be started until the frame/block model proves extensible enough to represent nested structures cleanly.
 
-## v0.4 — Entropy metadata inspection
+## v0.5 — Entropy metadata inspection
 
 Candidate scope:
 
@@ -96,7 +105,7 @@ Candidate scope:
 - FSE table metadata;
 - visualization-oriented models for entropy structures.
 
-## v0.5 — WebAssembly and browser inspector
+## v0.6 — WebAssembly and browser inspector
 
 Candidate scope:
 
@@ -109,7 +118,7 @@ Candidate scope:
 
 The Web UI should remain a consumer of the same `zstdscope` core rather than a separate parser.
 
-## v0.6 — Analysis and benchmark tooling
+## v0.7 — Analysis and benchmark tooling
 
 Candidate scope:
 
