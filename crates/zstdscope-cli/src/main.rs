@@ -1,5 +1,6 @@
 #![forbid(unsafe_code)]
 
+mod json;
 mod render;
 
 use std::{
@@ -121,7 +122,7 @@ fn read_input_with_limit(path: &Path, max_input_bytes: u64) -> Result<Vec<u8>, C
 
 fn write_inspection<W: Write>(writer: &mut W, file: &ZstdFile, json: bool) -> Result<(), CliError> {
     if json {
-        serde_json::to_writer_pretty(&mut *writer, file).map_err(CliError::Json)?;
+        json::write(&mut *writer, file).map_err(CliError::Json)?;
         writer.write_all(b"\n").map_err(CliError::Output)?;
     } else {
         render::render(writer, file).map_err(CliError::Output)?;
