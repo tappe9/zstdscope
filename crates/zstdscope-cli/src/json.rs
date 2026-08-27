@@ -51,14 +51,14 @@ impl From<&Frame> for JsonFrameV1 {
 #[derive(Serialize)]
 #[serde(tag = "type", content = "data", rename_all = "snake_case")]
 enum JsonFrameKindV1 {
-    Standard(JsonStandardFrameV1),
+    Standard(Box<JsonStandardFrameV1>),
     Skippable(JsonSkippableFrameV1),
 }
 
 impl From<&FrameKind> for JsonFrameKindV1 {
     fn from(source: &FrameKind) -> Self {
         match source {
-            FrameKind::Standard(frame) => Self::Standard(frame.into()),
+            FrameKind::Standard(frame) => Self::Standard(Box::new(frame.into())),
             FrameKind::Skippable(frame) => Self::Skippable(frame.into()),
         }
     }
