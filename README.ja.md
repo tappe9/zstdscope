@@ -9,9 +9,9 @@ ZstdScopeは、Zstandard圧縮データ形式の構造を解析する **Pure Rus
 
 主目的は圧縮・展開ではなく、`.zst`などのZstandard streamに含まれるFrame、Header、Block、offset、sizeなどのencoded structureを、安全かつ再利用可能なRust APIとCLIから取得することです。Compressed Blockのpayload内部はopaqueとして扱います。
 
-> **`zstdscope` library v0.2.0を[crates.io](https://crates.io/crates/zstdscope)で公開しています。** pre-1.0のため、Rust Public APIとversioned CLI JSON contractは、明示的な方針に基づいて変更される可能性があります。
+> **`zstdscope` libraryはv0.2.0を公開済みです。v0.3.0 project releaseでは、`zstdscope-cli` v0.3.0を初めてcrates.ioへ公開します。** Rust APIとCLI/JSONのcompatibility contractは別々に進化するため、package versionを独立して管理します。
 
-**リンク:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.2.0 Release](https://github.com/tappe9/zstdscope/releases/tag/v0.2.0)
+**リンク:** [library crates.io](https://crates.io/crates/zstdscope) · [CLI crates.io](https://crates.io/crates/zstdscope-cli) · [docs.rs](https://docs.rs/zstdscope) · [Changelog](CHANGELOG.md) · [Releases](https://github.com/tappe9/zstdscope/releases)
 
 ## インストール
 
@@ -38,13 +38,13 @@ cargo add zstdscope --features serde
 
 ### CLI
 
-CLI package名は`zstdscope-cli`、installされるbinary名は`zstdscope`です。公開済みCLI releaseはcrates.ioからinstallします。
+CLI package名は`zstdscope-cli`、installされるbinary名は`zstdscope`です。
 
 ```bash
-cargo install zstdscope-cli --locked
+cargo install zstdscope-cli --version 0.3.0 --locked
 ```
 
-CLI crateの初回release公開前に現在の`main`を利用する場合は、repositoryを手動cloneせず次のコマンドでinstallできます。
+crates.io releaseではなく現在のrepository revisionをinstallする場合:
 
 ```bash
 cargo install --git https://github.com/tappe9/zstdscope zstdscope-cli --locked
@@ -53,6 +53,8 @@ cargo install --git https://github.com/tappe9/zstdscope zstdscope-cli --locked
 正式なCLI release channelにはcrates.ioを採用します。GitHub Release向けprebuilt binary、署名、checksumは現在提供しません。これらは再現可能な自動release policyを別途定義した場合のみ追加します。
 
 Source buildはGitHub-hosted runner上のUbuntu x86_64、Windows x86_64、macOS arm64で継続検証します。その他のRust対応targetはbest effortです。これはsource buildのsupport範囲であり、prebuilt binary提供を保証するものではありません。
+
+LibraryとCLIは独立したpackage versionを使用します。v0.3 project releaseではparserとPublic Rust APIに変更がないため、`zstdscope-cli 0.3.0`は公開済みの`zstdscope 0.2.0` APIへ依存します。
 
 ## 解析する範囲
 
@@ -202,7 +204,7 @@ CLIはPublic Rust modelを直接serializeせず、専用JSON DTOを利用しま�
 
 I/O error、parse error、input size limit超過は非0で終了し、diagnosticをstderrへ出力します。Partial-success JSONは出力しません。Output write failureでpanicせず、downstream processが通常どおりpipeを閉じた場合は正常終了として扱います。
 
-詳細は[ADR 0005](docs/adr/0005-versioned-cli-json.md)と[ADR 0006](docs/adr/0006-cli-distribution.md)を参照してください。
+詳細は[ADR 0005](docs/adr/0005-versioned-cli-json.md)、[ADR 0006](docs/adr/0006-cli-distribution.md)、[ADR 0007](docs/adr/0007-independent-package-versioning.md)を参照してください。
 
 ## 構成
 
@@ -223,6 +225,8 @@ Public API方針は[Public API設計](docs/API-DESIGN.md)で管理していま�
 - [アーキテクチャ](ARCHITECTURE.md)
 - [Zstandardフォーマットメモ](docs/ZSTD-FORMAT.md)
 - [Public API設計](docs/API-DESIGN.md)
+- [Changelog](CHANGELOG.md)
+- [Release手順](docs/RELEASING.md)
 - [Supply-chain policy](docs/SUPPLY-CHAIN.md)
 - [Fuzzing guide](FUZZING.md)
 - [Roadmap](ROADMAP.md)
