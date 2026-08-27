@@ -10,19 +10,25 @@ on:
 permissions:
   contents: read
 
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.event.pull_request.number || github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
 jobs:
   quality:
     name: Quality gates
     runs-on: ubuntu-latest
+    timeout-minutes: 20
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
         with:
           toolchain: stable
           components: rustfmt, clippy
+          targets: wasm32-unknown-unknown
 
       - name: Format
         run: cargo fmt --check
@@ -41,18 +47,53 @@ jobs:
       - name: Core default features
         run: cargo test -p zstdscope --no-default-features --locked
 
-      - name: Package contents
+      - name: Core WebAssembly compile
+        run: cargo check -p zstdscope --target wasm32-unknown-unknown --no-default-features --locked
+
+      - name: Core package contents
         run: cargo package -p zstdscope --list --locked
 
-      - name: Publish dry run
+      - name: Core publish dry run
         run: cargo publish -p zstdscope --dry-run --locked
+
+      - name: CLI package contents
+        run: cargo package -p zstdscope-cli --list --locked
+
+      - name: CLI publish dry run
+        run: cargo publish -p zstdscope-cli --dry-run --locked
+
+      - name: Packaged CLI smoke test
+        shell: bash
+        run: |
+          cargo package -p zstdscope-cli --locked
+          package_dir="target/package/zstdscope-cli-0.2.0"
+          install_root="$RUNNER_TEMP/zstdscope-install"
+          cargo install --path "$package_dir" --locked --root "$install_root"
+
+          test "$("$install_root/bin/zstdscope" --version)" = "zstdscope 0.2.0"
+          printf '\x28\xb5\x2f\xfd\x00\x00\x01\x00\x00' > "$RUNNER_TEMP/minimal.zst"
+          "$install_root/bin/zstdscope" inspect "$RUNNER_TEMP/minimal.zst"
+          "$install_root/bin/zstdscope" inspect "$RUNNER_TEMP/minimal.zst" --json \
+            | grep -F '"schema_version": 1'
+
+  supply-chain:
+    name: Supply-chain policy
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+
+      - name: Check advisories, licenses, bans, and sources
+        uses: EmbarkStudios/cargo-deny-action@3c6349835b2b7b196a839186cb8b78e02f7b5f25 # v2
 
   msrv:
     name: MSRV (Rust 1.85.0)
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install Rust 1.85.0
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
@@ -68,6 +109,7 @@ jobs:
   platform-tests:
     name: Tests (${{ matrix.os }})
     runs-on: ${{ matrix.os }}
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -77,7 +119,7 @@ jobs:
           - macos-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v7
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
 
       - name: Install Rust stable
         uses: dtolnay/rust-toolchain@6c977a6ca4077a0ceb28ffbe03f59d46e9ac8772
