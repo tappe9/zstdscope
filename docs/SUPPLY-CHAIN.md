@@ -46,10 +46,9 @@ The current allowlist is:
 
 - `Apache-2.0`;
 - `MIT`;
-- `Unicode-3.0`;
-- `Unlicense`.
+- `Unicode-3.0`.
 
-The allowlist reflects licenses present in the locked dependency graph. Adding a license requires an explicit `deny.toml` change and review; CI must not silently broaden acceptance.
+The allowlist reflects the minimum license set needed by the locked dependency graph. A dependency with an `Unlicense OR MIT` expression is accepted through its MIT option; `Unlicense` is not broadly allowlisted. Adding a license requires an explicit `deny.toml` change and review, and CI must not silently broaden acceptance.
 
 ### Bans and sources
 
@@ -100,7 +99,7 @@ cargo package -p zstdscope-cli --list --locked
 cargo publish -p zstdscope-cli --dry-run --locked
 ```
 
-The generated CLI package is installed from `target/package` into a temporary root. The resulting binary must report the package version and successfully inspect a minimal Standard Frame in text and JSON modes.
+The generated CLI package is installed from `target/package` into a temporary root. The resulting binary must report the generated package version and successfully inspect a minimal Standard Frame in text and JSON modes.
 
 Pull-request CI never receives crates.io publish credentials. Actual publication is a deliberate release operation after the exact commit and package contents have been reviewed.
 

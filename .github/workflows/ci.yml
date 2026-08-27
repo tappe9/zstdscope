@@ -69,7 +69,8 @@ jobs:
           package_dir="$(find target/package -maxdepth 1 -type d -name 'zstdscope-cli-*' -print -quit)"
           test -n "$package_dir"
 
-          package_version="${package_dir##*-}"
+          package_name="${package_dir##*/}"
+          package_version="${package_name#zstdscope-cli-}"
           install_root="$RUNNER_TEMP/zstdscope-install"
           cargo install --path "$package_dir" --locked --root "$install_root"
 
