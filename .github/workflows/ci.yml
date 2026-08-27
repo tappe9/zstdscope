@@ -66,11 +66,14 @@ jobs:
         shell: bash
         run: |
           cargo package -p zstdscope-cli --locked
-          package_dir="target/package/zstdscope-cli-0.2.0"
+          package_dir="$(find target/package -maxdepth 1 -type d -name 'zstdscope-cli-*' -print -quit)"
+          test -n "$package_dir"
+
+          package_version="${package_dir##*-}"
           install_root="$RUNNER_TEMP/zstdscope-install"
           cargo install --path "$package_dir" --locked --root "$install_root"
 
-          test "$("$install_root/bin/zstdscope" --version)" = "zstdscope 0.2.0"
+          test "$("$install_root/bin/zstdscope" --version)" = "zstdscope $package_version"
           printf '\x28\xb5\x2f\xfd\x00\x00\x01\x00\x00' > "$RUNNER_TEMP/minimal.zst"
           "$install_root/bin/zstdscope" inspect "$RUNNER_TEMP/minimal.zst"
           "$install_root/bin/zstdscope" inspect "$RUNNER_TEMP/minimal.zst" --json \

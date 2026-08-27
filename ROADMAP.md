@@ -52,13 +52,29 @@ Released scope:
 - a manual `cargo-fuzz` target with structural model-invariant checks on successful parses;
 - bounded CLI file reads with a default 256 MiB encoded-input guard and explicit `--max-input-bytes` override.
 
+## Post-v0.2 maintenance — Contract and distribution hardening
+
+Status: **completed on `main`; release publication is a separate release operation.**
+
+Completed scope:
+
+- dedicated CLI JSON schema-version-1 DTOs, decoupled from the public Rust model;
+- decimal-string representation for JSON values originating from Rust `u64` fields;
+- explicit JSON compatibility and breaking-change policy;
+- publishable `zstdscope-cli` package with crates.io as the selected release channel;
+- package, publish-dry-run, install, version, text-output, and JSON smoke validation from the generated CLI package;
+- immutable GitHub Actions pins, least-privilege permissions, concurrency controls, and job timeouts;
+- documented `cargo-deny` advisory/license/source policy;
+- weekly Cargo and GitHub Actions Dependabot updates;
+- `wasm32-unknown-unknown` compile-only coverage for the dependency-light core boundary.
+
 Deferred candidate scope for later releases:
 
 - richer field-level spans for hex-view mapping;
 - more detailed diagnostics;
 - streaming or file-backed library inspection API for very large files;
 - scheduled or continuous fuzzing automation;
-- JSON schema documentation;
+- prebuilt, checksummed, and signed GitHub Release binaries;
 - CLI output refinements.
 
 ## v0.3 — Compressed-block structural metadata
@@ -70,7 +86,7 @@ Candidate scope:
 - nested spans within Compressed blocks;
 - structural validation that does not require full decompression.
 
-This milestone should not be started until the v0.1 frame/block model proves extensible enough to represent nested structures cleanly.
+This milestone should not be started until the frame/block model proves extensible enough to represent nested structures cleanly.
 
 ## v0.4 — Entropy metadata inspection
 
@@ -115,7 +131,8 @@ Potential criteria:
 - large corpus of valid and malformed tests;
 - mature diagnostics;
 - clear support policy for Zstandard format revisions;
-- published crate and release artifacts.
+- published crate and release artifacts;
+- reconsidered mandatory semantic-version compatibility checks.
 
 ## Guiding rule
 

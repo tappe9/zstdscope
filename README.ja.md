@@ -5,15 +5,17 @@
 [![CI](https://github.com/tappe9/zstdscope/actions/workflows/ci.yml/badge.svg)](https://github.com/tappe9/zstdscope/actions/workflows/ci.yml)
 [![License](https://img.shields.io/crates/l/zstdscope.svg)](https://github.com/tappe9/zstdscope#license)
 
-ZstdScope は、Zstandard圧縮データ形式の構造を解析・可視化するための **Pure Rust製Inspector / Parserツールキット**を目指すOSSプロジェクトです。
+ZstdScopeは、Zstandard圧縮データ形式の構造を解析する **Pure Rust製Inspector / Parserツールキット**です。
 
-このプロジェクトの主目的は圧縮・展開ではなく、`.zst`などのZstandardストリームに含まれるFrame、Header、Block、offset、sizeなどの構造情報を安全に取得できるAPIを提供することです。
+主目的は圧縮・展開ではなく、`.zst`などのZstandard streamに含まれるFrame、Header、Block、offset、sizeなどのencoded structureを、安全かつ再利用可能なRust APIとCLIから取得することです。Compressed Blockのpayload内部はopaqueとして扱います。
 
-> **v0.2.0を[crates.io](https://crates.io/crates/zstdscope)で公開しています。** pre-1.0のためPublic APIとJSON representationは今後意図的に変更される可能性があります。
+> **`zstdscope` library v0.2.0を[crates.io](https://crates.io/crates/zstdscope)で公開しています。** pre-1.0のため、Rust Public APIとversioned CLI JSON contractは、明示的な方針に基づいて変更される可能性があります。
 
 **リンク:** [crates.io](https://crates.io/crates/zstdscope) · [docs.rs](https://docs.rs/zstdscope) · [v0.2.0 Release](https://github.com/tappe9/zstdscope/releases/tag/v0.2.0)
 
 ## インストール
+
+### Rust library
 
 Rustプロジェクトへ追加する場合:
 
@@ -28,60 +30,97 @@ cargo add zstdscope
 zstdscope = "0.2"
 ```
 
-Serdeによるserializationを有効にする場合:
+Public inspection modelのSerde serializationを有効にする場合:
 
 ```bash
 cargo add zstdscope --features serde
 ```
 
-## v0.1で解析する範囲
+### CLI
 
-- Standard Zstandard magic number
-- 全16種類のSkippable Frame magic number
-- Frame Header Descriptor
-- Window Size
-- Frame Content Size
-- Dictionary ID
-  - フィールドなし
-  - 明示的に`0`が格納されている
-  - 非0のID
-  を区別する
-- Content Checksumの有無と格納値
-- Block Header
-- Raw / RLE / Compressed Block
-- Last Block Flag
-- Frame / Header field / Blockのsource spanとencoded size
-- 複数Frameの連結ストリーム
+CLI package名は`zstdscope-cli`、installされるbinary名は`zstdscope`です。公開済みCLI releaseはcrates.ioからinstallします。
 
-v0.1ではCompressed Block内部の以下は解析しません。
-
-- Literals
-- Sequences
-- Huffman
-- FSE
-
-また、Content Checksumは格納値と位置を取得しますが、復元データに対する検証は行いません。圧縮・展開機能もZstdScopeの目的外です。
-
-v0.1は**実装している構造境界についてstrict**です。空入力・途中で切れたデータ・未知のtop-level magic・reserved bit/type・不可能なblock size・検証可能なFrame Content Size矛盾・末尾の不完全なFrameはエラーとします。一方、opaqueとして扱うCompressed Block内部やContent Checksumの正当性まで検証済みであるとは扱いません。
-
-## 構成
-
-```text
-zstdscope/
-├── crates/
-│   ├── zstdscope/       # Pure Rust Parser Library
-│   └── zstdscope-cli/   # CLI
-├── docs/
-└── ARCHITECTURE.md
+```bash
+cargo install zstdscope-cli --locked
 ```
 
-Public APIは次の形です。
+CLI crateの初回release公開前に現在の`main`を利用する場合は、repositoryを手動cloneせず次のコマンドでinstallできます。
+
+```bash
+cargo install --git https://github.com/tappe9/zstdscope zstdscope-cli --locked
+```
+
+正式なCLI release channelにはcrates.ioを採用します。GitHub Release向けprebuilt binary、署名、checksumは現在提供しません。これらは再現可能な自動release policyを別途定義した場合のみ追加します。
+
+Source buildはGitHub-hosted runner上のUbuntu x86_64、Windows x86_64、macOS arm64で継続検証します。その他のRust対応targetはbest effortです。これはsource buildのsupport範囲であり、prebuilt binary提供を保証するものではありません。
+
+## 解析する範囲
+
+現在のstructural scopeでは以下を扱います。
+
+- Standard Frameと全16種類のSkippable Frame magic
+- 複数Frameの連結streamと正確なFrame境界
+- Frame Header Descriptorとderived Window Size
+- 全encoded widthのFrame Content Size
+- Block-level decoded-size boundsから検証可能なFrame Content Size矛盾
+- Dictionary IDのfieldなし・明示的な`0`・非0の区別
+- Raw / RLE / Compressed Block Headerとencoded content span
+- RLEのdeclared sizeと1 byteのencoded content sizeの区別
+- 必須outer section headerを格納できないCompressed Blockのstructural rejection
+- Content Checksumの格納値とspan（checksum validationは行わない）
+- major fieldのzero-based source span
+- malformed / truncated inputに対するlocation-aware typed error
+
+Literals、Sequences、Huffman、FSEなどCompressed Block内部は解析しません。Parserは最低1つのcomplete Frameを要求し、入力全体をconsumeします。空入力、未知のtop-level magic、reserved encoding、不可能なstructural size、検証可能な矛盾、末尾のpartial Frameはerrorです。
+
+## Rust library
+
+主なAPIは次のとおりです。
 
 ```rust
 pub fn inspect(data: &[u8]) -> Result<ZstdFile, ZstdError>;
 ```
 
-`inspect()`は従来どおりFrame/Block件数に上限を設けない簡潔なAPIです。外部から受け取った入力などにmetadata件数の上限を設けたい場合は、`inspect_with_limits()`を利用できます。
+使用例:
+
+```rust
+use zstdscope::{FrameKind, inspect};
+
+fn main() -> Result<(), Box<dyn std::error::Error>> {
+    let bytes = std::fs::read("sample.zst")?;
+    let file = inspect(&bytes)?;
+
+    for frame in &file.frames {
+        match &frame.kind {
+            FrameKind::Standard(standard) => {
+                println!(
+                    "frame #{}: standard, {} blocks, offset={}, size={}",
+                    frame.index,
+                    standard.blocks.len(),
+                    frame.span.offset,
+                    frame.span.length
+                );
+            }
+            FrameKind::Skippable(skippable) => {
+                println!(
+                    "frame #{}: skippable variant {}, payload={} bytes",
+                    frame.index,
+                    skippable.variant,
+                    skippable.declared_payload_size
+                );
+            }
+        }
+    }
+
+    Ok(())
+}
+```
+
+Public offsetはencoded input先頭からのzero-based byte offsetです。Opaque BlockとSkippable payloadは解析結果へcopyせず、spanで表現します。
+
+### Resource limits
+
+`inspect()`はFrame/Block件数に上限を設けない簡潔なAPIです。外部入力などにmetadata件数のbudgetを設ける場合は`inspect_with_limits()`を利用します。
 
 ```rust
 use zstdscope::{InspectionLimits, inspect_with_limits};
@@ -95,51 +134,88 @@ let limits = InspectionLimits {
 let file = inspect_with_limits(&bytes, limits)?;
 ```
 
-上記の値は例であり、すべての用途に対する安全なdefault値ではありません。用途と想定入力に応じて設定してください。設定値ちょうどまでは許可され、さらに1件のFrame/Blockを解析しようとした時点で、対象構造の開始offsetを持つ`ZstdError::ResourceLimitExceeded`を返します。
+上記は例であり、すべての用途に対する安全なdefault値ではありません。設定値ちょうどまでは許可され、さらに1件を解析しようとした時点で、対象構造の開始offsetを持つ`ZstdError::ResourceLimitExceeded`を返します。
 
-この制限はFrame/Block metadataの**件数**を制御するもので、callerが保持する入力sliceのbyte数を制限したりstreaming化したりするものではありません。Block/Skippable payloadを解析結果へコピーしない既存方針も維持します。
+この制限はFrame/Block metadataの件数を制御するもので、callerが保持する入力sliceのbyte数を制限したりstreaming化したりするものではありません。
 
-Public API方針は[Public API設計](docs/API-DESIGN.md)で管理しています。
+### Optional serialization
+
+Core crateのSerdeはoptionalです。
+
+```toml
+[features]
+default = []
+serde = ["dep:serde"]
+```
+
+このfeatureで得られるPublic Rust modelのserialization表現と、CLI JSON wire contractは独立した契約です。Parseのみを行うconsumerにSerde dependencyは不要です。
 
 ## CLI
 
+Human-readable output:
+
 ```text
 zstdscope inspect sample.zst
-zstdscope inspect sample.zst --json
 ```
 
-リポジトリから実行する場合:
+Repository checkoutから実行する場合:
 
 ```text
 cargo run -p zstdscope-cli -- inspect sample.zst
-cargo run -p zstdscope-cli -- inspect sample.zst --json
 ```
+
+Frame typeと境界、Header metadata、Block type/size、Skippable payload metadata、格納されているChecksum metadataを表示します。
 
 ### 大きな入力ファイル
 
-CLIは引き続きin-memoryのlibrary APIを利用するため、受け入れた入力ファイルは解析中にメモリ上へ保持されます。defaultのCLI動作をboundedにするため、`zstdscope inspect`は **268,435,456 bytes（256 MiB）** を超えるencoded inputをparse前に拒否します。
+CLIはin-memoryのlibrary APIを利用するため、受け入れた入力ファイルは解析中にメモリ上へ保持されます。defaultのCLI動作をboundedにするため、`zstdscope inspect`は **268,435,456 bytes（256 MiB）** を超えるencoded inputをparse前に拒否します。
 
-上限を明示的に変更する場合は`--max-input-bytes`を指定します。
+上限を明示的に変更する場合:
 
 ```text
 zstdscope inspect large.zst --max-input-bytes 1073741824
 ```
 
-上限を引き上げると、encoded input bufferに対して許容する最大メモリ量も増えます。CLIは可能な場合は全体read前にfile sizeを確認し、実際のread自体にも上限を適用するため、read中にファイルが増加しても設定した上限をそのまま通過しません。
+上限を引き上げるとencoded input bufferへ許容する最大メモリ量も増えます。CLIは可能な場合は全体read前にfile sizeを確認し、実際のread自体にも上限を適用するため、read中にファイルが増加しても設定上限をsilently bypassしません。
 
-このCLIのbyte上限と、libraryの`inspect_with_limits()`によるFrame/Block metadata件数上限は別のresource policyです。どちらもstreaming化するものではありません。入力全体をメモリへ保持したくない非常に大きなファイルについては、将来のstreaming/file-backed library APIで対応する方針です。
+CLIのbyte上限と、libraryの`inspect_with_limits()`によるmetadata件数上限は別のresource policyです。どちらもstreaming化するものではありません。
 
-I/O error、parse error、input size limit超過は非0で終了し、diagnosticをstderrへ出力します。pipe先が通常どおり先に閉じた場合のbroken pipeはpanicさせず正常終了として扱います。
+### Versioned JSON output
 
-再利用可能な`zstdscope` libraryは[crates.io](https://crates.io/crates/zstdscope)で公開済みです。API documentationは[docs.rs](https://docs.rs/zstdscope)で確認できます。
+Machine-readable output:
 
-`zstdscope-cli` package自体は現在`publish = false`で、CLI binaryの配布はlibrary crateとは分けて今後整備します。
+```text
+zstdscope inspect sample.zst --json
+```
 
-## JSON
+CLIはPublic Rust modelを直接serializeせず、専用JSON DTOを利用します。現在のwire contractは次のとおりです。
 
-CLIでは`--json`によるmachine-readableな解析結果を提供します。
+- top-levelに`"schema_version": 1`
+- field名とenum値は明示的な`snake_case`
+- Frame kindは`type` / `data`のtagged representation
+- Rustの`u64`値（offset、length、input size、window size、Frame Content Sizeなど）はJavaScriptでinteger precisionを失わないdecimal string
+- boundedな`u8`、`u32`、`usize`はJSON number
+- Dictionary IDのfieldなしと明示的な`0`を保持
+- RLEのdeclared sizeとencoded sizeを保持
 
-JSONのfield名とenum値は`snake_case`を使用し、serialization libraryのdefault挙動に偶然依存しないよう、表現を明示してテストしています。Dictionary IDの「fieldなし」と「明示的な0」、RLEのdeclared sizeとencoded sizeなど、Inspector固有の情報も保持します。
+1.0より前でも、既存consumerと互換なadditive fieldはschema version 1内で追加できます。fieldの削除・rename・type変更、enum/tag representation変更などのbreaking changeでは`schema_version`を更新し、release noteへ記録します。Human-readable outputは別契約であり、JSON DTO refactorの影響を受けません。
+
+I/O error、parse error、input size limit超過は非0で終了し、diagnosticをstderrへ出力します。Partial-success JSONは出力しません。Output write failureでpanicせず、downstream processが通常どおりpipeを閉じた場合は正常終了として扱います。
+
+詳細は[ADR 0005](docs/adr/0005-versioned-cli-json.md)と[ADR 0006](docs/adr/0006-cli-distribution.md)を参照してください。
+
+## 構成
+
+```text
+zstdscope/
+├── crates/
+│   ├── zstdscope/       # Pure Rust Parser Library
+│   └── zstdscope-cli/   # Public library APIを利用するCLI
+├── docs/
+└── ARCHITECTURE.md
+```
+
+Public API方針は[Public API設計](docs/API-DESIGN.md)で管理しています。
 
 ## ドキュメント
 
@@ -147,31 +223,29 @@ JSONのfield名とenum値は`snake_case`を使用し、serialization libraryのd
 - [アーキテクチャ](ARCHITECTURE.md)
 - [Zstandardフォーマットメモ](docs/ZSTD-FORMAT.md)
 - [Public API設計](docs/API-DESIGN.md)
+- [Supply-chain policy](docs/SUPPLY-CHAIN.md)
+- [Fuzzing guide](FUZZING.md)
 - [Roadmap](ROADMAP.md)
 - [ADR](docs/adr/)
 
 設計ドキュメントは英語を正式版として管理し、このREADMEは日本語で概要を確認するためのものとします。
 
-## 仕様の参照先
-
-- [RFC 8878](https://www.rfc-editor.org/rfc/rfc8878.html)
-- [Zstandard reference format specification](https://github.com/facebook/zstd/blob/dev/doc/zstd_compression_format.md)
-- [Zstandard reference implementation](https://github.com/facebook/zstd)
-
 ## 開発・安全性方針
 
-ZstdScopeでは任意の入力byte列を信用しません。
+ZstdScopeは任意の入力byte列を信用しません。
 
-Parserでは特に以下を重視します。
-
-- bounds check
+- bounds-checked read/skip
 - checked arithmetic
 - malformed inputでparser panicしない
-- 不正なsizeを理由にopaque payloadをコピーしない
-- v0.1ではproject codeに`unsafe`を使用しない
-- Zstdの公開仕様を根拠に実装する
+- opaque payloadを結果へcopyしない
+- core crateでproject-authored `unsafe`を禁止
+- Zstandard公開仕様を根拠に実装
+- configurable metadata count limits
+- CLI default 256 MiB encoded-input guard
 
-Public parser APIは引き続き入力全体をメモリ上で扱います。`inspect_with_limits()`はFrame/Block metadata件数を制限し、CLIはそれとは別にdefault 256 MiBのencoded-input guardを持ちます。`--max-input-bytes`で明示的に上限を変更できますが、受け入れたCLI入力は依然として全体がメモリ上に存在します。streaming/file-backed APIは後続milestoneで整備します。
+Public parser APIは入力全体をメモリ上で扱います。`inspect_with_limits()`はmetadata件数を制限し、CLIは別途encoded-input byte上限を持ちます。`--max-input-bytes`で上限を変更できますが、受け入れた入力は依然として全体がメモリ上に存在します。Streaming/file-backed APIは後続milestoneです。
+
+CIではformat、Clippy、test、rustdoc、MSRV、Ubuntu/Windows/macOS、package/publish dry-run、packaged CLI smoke、WebAssembly compile、advisory/license/source policyを検証します。詳細は[Supply-chain policy](docs/SUPPLY-CHAIN.md)と[SECURITY.md](SECURITY.md)を参照してください。
 
 ## ライセンス
 
