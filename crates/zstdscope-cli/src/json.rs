@@ -113,10 +113,7 @@ impl From<&FrameHeader> for JsonFrameHeaderV1 {
                 .frame_content_size
                 .as_ref()
                 .map(JsonFrameContentSizeV1::from),
-            dictionary_id: source
-                .dictionary_id
-                .as_ref()
-                .map(JsonDictionaryIdV1::from),
+            dictionary_id: source.dictionary_id.as_ref().map(JsonDictionaryIdV1::from),
             window_size: source.window_size.to_string(),
             content_checksum_flag: source.content_checksum_flag,
             single_segment: source.single_segment,
